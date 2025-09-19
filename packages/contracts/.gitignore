@@ -1,0 +1,63 @@
+# ------------------------
+# Foundry / Solidity
+# ------------------------
+cache/
+out/
+
+# Ignores development broadcast logs
+!/broadcast
+/broadcast/*/31337/
+/broadcast/**/dry-run/
+
+# Ignore forge coverage output
+coverage/
+
+# ------------------------
+# Node.js / Next.js
+# ------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+.pnpm-debug.log
+
+# Build output
+.next/
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# ------------------------
+# Environment / Secrets
+# ------------------------
+.env
+.env.*.local
+.env.local
+
+# ------------------------
+# OS / Editor
+# ------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# ------------------------
+# Docs
+# ------------------------
+docs/
+
+# ------------------------
+# Misc
+# ------------------------
+*.swp
+*.swo

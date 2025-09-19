@@ -1,0 +1,14 @@
+{
+	"name": "web3-Kickstarter",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"dev:web": "pnpm --filter @apps/web dev",
+		"dev:anvil": "anvil -p 8545",
+		"dev": "concurrently -k -n anvil,web \"pnpm dev:anvil\" \"pnpm dev:web\""
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC"
+}
