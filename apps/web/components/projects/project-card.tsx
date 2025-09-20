@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
@@ -6,32 +6,35 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from '@/components/ui/card';
 
-import type { ProjectSummary } from "./types";
+import type { ProjectSummary } from './types';
 
 export type ProjectCardProps = {
   project: ProjectSummary;
 };
 
-const statusLabel: Record<ProjectSummary["status"], string> = {
-  active: "进行中",
-  successful: "已成功",
-  failed: "未达成",
-  cancelled: "已取消",
+const statusLabel: Record<ProjectSummary['status'], string> = {
+  active: '进行中',
+  successful: '已成功',
+  failed: '未达成',
+  cancelled: '已取消',
 };
 
-const statusVariant: Record<ProjectSummary["status"], "default" | "secondary" | "destructive" | "outline"> = {
-  active: "secondary",
-  successful: "default",
-  failed: "destructive",
-  cancelled: "outline",
+const statusVariant: Record<
+  ProjectSummary['status'],
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  active: 'secondary',
+  successful: 'default',
+  failed: 'destructive',
+  cancelled: 'outline',
 };
 
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
-    currency: "USD",
+  return new Intl.NumberFormat('zh-CN', {
+    style: 'currency',
+    currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value);
 }
@@ -45,10 +48,10 @@ function getProgressValue(project: ProjectSummary) {
 }
 
 function formatDeadline(deadline: string) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
   }).format(new Date(deadline));
 }
 
@@ -65,24 +68,24 @@ export function ProjectCard({ project }: ProjectCardProps) {
 
       <CardContent className="space-y-5">
         <div className="space-y-2">
-          <div className="flex items-end justify-between text-sm text-muted-foreground">
+          <div className="text-muted-foreground flex items-end justify-between text-sm">
             <span>筹集 {formatCurrency(project.pledgedAmount)}</span>
             <span className="text-xs">目标 {formatCurrency(project.goalAmount)}</span>
           </div>
-          <div className="h-2 rounded-full bg-muted">
+          <div className="bg-muted h-2 rounded-full">
             <div
-              className="h-full rounded-full bg-primary transition-all"
+              className="bg-primary h-full rounded-full transition-all"
               style={{ width: `${Math.round(progress * 100)}%` }}
             />
           </div>
-          <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="text-muted-foreground flex justify-between text-xs">
             <span>进度 {Math.round(progress * 100)}%</span>
             <span>截止 {formatDeadline(project.deadline)}</span>
           </div>
         </div>
       </CardContent>
 
-      <CardFooter className="justify-between text-sm text-primary">
+      <CardFooter className="text-primary justify-between text-sm">
         <span>查看详情</span>
         <span aria-hidden>→</span>
       </CardFooter>

@@ -1,10 +1,28 @@
 {
+  // 总开关
   "editor.formatOnSave": true,
   "editor.formatOnPaste": true,
-  // 默认所有文件走 Prettier
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit"   // 如装了 eslint，不会抢格式化
+  },
+
+  // 统一用 Prettier 做格式化
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  // Solidity 文件强制走 Prettier（会调用 prettier-plugin-solidity）
+
+  // Solidity 也走 Prettier（由 prettier-plugin-solidity 处理）
   "[solidity]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
-  }
+  },
+
+  // 保底：确保 .sol 被识别为 Solidity
+  "files.associations": {
+    "*.sol": "solidity"
+  },
+
+  // 有些机器需要明确声明用工作区的 Prettier
+  "prettier.prettierPath": "./node_modules/prettier",
+  "prettier.resolveGlobalModules": false,
+
+  // 可选：避免“只格式化改动部分”的坑
+  "editor.formatOnSaveMode": "file"
 }

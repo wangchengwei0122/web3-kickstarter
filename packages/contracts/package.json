@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "forge build"
+    
   },
   "keywords": [],
   "author": "",
@@ -12,6 +14,6 @@
   "devDependencies": {
     "prettier": "^3.6.2",
     "prettier-plugin-solidity": "^2.1.0",
-    "solhint": "^6.0.1"
+        "solhint": "^6.0.1"
   }
 }
