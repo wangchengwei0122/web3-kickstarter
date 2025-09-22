@@ -1,11 +1,13 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   useAccount,
   useBalance,
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
+  useWatchContractEvent,
+  usePublicClient,
 } from 'wagmi';
 import { counterAbi } from '@/lib/abi';
 import { counterAddress } from '@/lib/abi/Counter-address';
@@ -19,7 +21,7 @@ export default function DemoPage() {
   const { data: balance } = useBalance({
     address: address,
   });
-  const { data: number } = useReadContract({
+  const { data: number, refetch: refetchNumber } = useReadContract({
     address: counterAddress,
     abi: counterAbi,
     functionName: 'getNumber',
@@ -33,15 +35,53 @@ export default function DemoPage() {
       abi: counterAbi,
       functionName: 'increment',
     });
-    console.log(hash);
+    // console.log(hash);
     setHash(hash);
   };
-  useWaitForTransactionReceipt({
+  const { data: receipt, isSuccess } = useWaitForTransactionReceipt({
     hash,
-    confirmations: 1,
-    query: {
-      enabled: !!hash,
-      onSuccess: () => refetch(),
+  });
+  useEffect(() => {
+    if (isSuccess) {
+      refetchNumber();
+    }
+  }, [isSuccess, refetchNumber]);
+
+  const publicClient = usePublicClient();
+  const [fromBlock, setFromBlock] = useState<bigint | undefined>();
+
+  useEffect(() => {
+    (async () => {
+      const latest = await publicClient.getBlockNumber();
+      setFromBlock(latest); // 或 latest - 200n：还能补最近历史
+    })();
+  }, [publicClient]);
+
+  //   const pc = usePublicClient();
+  //   console.log('[transport]', pc.transport?.type, pc.transport);
+
+  useWatchContractEvent({
+    address: counterAddress,
+    abi: counterAbi,
+    eventName: 'NumberSet',
+    poll: true,
+    fromBlock,
+    enabled: fromBlock !== null,
+    pollingInterval: 1000,
+    onLogs: (logs) => {
+      console.log('NumberSet');
+      console.log(logs);
+
+      //   if (!hash) return;
+      //   // 找到这批里是否包含我这笔交易
+      //   const hit = logs.some((l) => l.transactionHash === hash);
+      //   if (hit) {
+      //     refetchNumber();
+      //     setHash(undefined); // 用完清空，避免重复匹配
+      //   }
+    },
+    onError: (err) => {
+      console.error('watch error:', err); // 关键：看是不是 eth_getLogs 不支持 / rate limit / filter 错误
     },
   });
 
