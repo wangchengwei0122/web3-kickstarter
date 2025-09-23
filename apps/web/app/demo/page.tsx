@@ -7,7 +7,6 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
   useWatchContractEvent,
-  usePublicClient,
 } from 'wagmi';
 import { counterAbi } from '@/lib/abi';
 import { counterAddress } from '@/lib/abi/Counter-address';
@@ -16,11 +15,9 @@ import { Button } from '@/components/ui/button';
 
 export default function DemoPage() {
   const { address } = useAccount();
-  const { writeContract, writeContractAsync, isPending } = useWriteContract();
+  const { data: balance } = useBalance({ address });
+  const { writeContractAsync, isPending } = useWriteContract();
 
-  const { data: balance } = useBalance({
-    address: address,
-  });
   const { data: number, refetch: refetchNumber } = useReadContract({
     address: counterAddress,
     abi: counterAbi,
@@ -29,59 +26,41 @@ export default function DemoPage() {
 
   const [hash, setHash] = useState<`0x${string}` | undefined>();
 
-  const increment = async () => {
-    const hash = await writeContractAsync({
-      address: counterAddress,
-      abi: counterAbi,
-      functionName: 'increment',
-    });
-    // console.log(hash);
-    setHash(hash);
-  };
-  const { data: receipt, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
+  // 方式一：主动等待特定交易完成 (非常可靠)
+  const { isSuccess } = useWaitForTransactionReceipt({ hash });
   useEffect(() => {
     if (isSuccess) {
+      console.log('Transaction confirmed, refetching number...');
       refetchNumber();
+      setHash(undefined); // 清理hash，防止重复触发
     }
   }, [isSuccess, refetchNumber]);
 
-  const publicClient = usePublicClient();
-  const [fromBlock, setFromBlock] = useState<bigint | undefined>();
+  const increment = async () => {
+    try {
+      const txHash = await writeContractAsync({
+        address: counterAddress,
+        abi: counterAbi,
+        functionName: 'increment',
+      });
+      setHash(txHash);
+    } catch (error) {
+      console.error('Failed to send transaction:', error);
+    }
+  };
 
-  useEffect(() => {
-    (async () => {
-      const latest = await publicClient.getBlockNumber();
-      setFromBlock(latest); // 或 latest - 200n：还能补最近历史
-    })();
-  }, [publicClient]);
-
-  //   const pc = usePublicClient();
-  //   console.log('[transport]', pc.transport?.type, pc.transport);
-
+  // 方式二：被动监听所有相关事件 (保持应用实时同步)
   useWatchContractEvent({
     address: counterAddress,
     abi: counterAbi,
     eventName: 'NumberSet',
-    poll: true,
-    fromBlock,
-    enabled: fromBlock !== null,
-    pollingInterval: 1000,
     onLogs: (logs) => {
-      console.log('NumberSet');
-      console.log(logs);
-
-      //   if (!hash) return;
-      //   // 找到这批里是否包含我这笔交易
-      //   const hit = logs.some((l) => l.transactionHash === hash);
-      //   if (hit) {
-      //     refetchNumber();
-      //     setHash(undefined); // 用完清空，避免重复匹配
-      //   }
+      console.log('✅ Event "NumberSet" detected!', logs);
+      console.log('✅成功了!', logs);
+      refetchNumber();
     },
-    onError: (err) => {
-      console.error('watch error:', err); // 关键：看是不是 eth_getLogs 不支持 / rate limit / filter 错误
+    onError: (error) => {
+      console.error('Error watching contract event:', error);
     },
   });
 
@@ -90,8 +69,10 @@ export default function DemoPage() {
       <ConnectButton />
       <div>Address: {address}</div>
       <div>Balance: {balance?.formatted}</div>
-      <div>Number: {number?.toString()}</div>.
-      <Button onClick={() => increment()}>{isPending ? 'loading' : 'Increment'}</Button>
+      <div>Number: {number?.toString()}</div>
+      <Button onClick={increment} disabled={isPending}>
+        {isPending ? 'Confirming...' : 'Increment'}
+      </Button>
     </div>
   );
 }

@@ -1,1 +1,1 @@
-export const counterAddress = "0xa82ff9afd8f496c3d6ac40e2a0f282e47488cfc9" as `0x${string}`;
+export const counterAddress = "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9" as `0x${string}`;
