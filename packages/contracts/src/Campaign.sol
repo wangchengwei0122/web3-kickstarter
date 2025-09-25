@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.30;
 
 import {ReentrancyGuard} from "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+import {ICampaignFactory} from "./ICampaignFactory.sol";
 
 contract Campaign is ReentrancyGuard {
   event Pledged(address indexed backer, uint256 amount);
@@ -19,13 +20,13 @@ contract Campaign is ReentrancyGuard {
   address creator; // 创建者
   address public immutable factory; // 工厂
   string public metadataURI;
-  uint256 goal; // 目标金额
-  uint64 deadline; // 截止时间
-  Status status; // 状态
-  uint256 totalPledged; // 已筹金额
-  mapping(address => uint256) pledges; // 出资
-  mapping(address => uint256) rewards; // 奖励
-  mapping(address => uint256) milestones; // 里程碑
+  uint256 public goal; // 目标金额
+  uint64 public deadline; // 截止时间
+  Status public status; // 状态
+  uint256 public totalPledged; // 已筹金额
+  mapping(address => uint256) public pledges; // 出资
+  // mapping(address => uint256) rewards; // 奖励
+  // mapping(address => uint256) milestones; // 里程碑
 
   modifier onlyCreator() {
     require(msg.sender == creator, "Only creator can call this function");
@@ -77,13 +78,27 @@ contract Campaign is ReentrancyGuard {
     emit Pledged(msg.sender, msg.value);
   }
 
-  function finalize() external onlyCreator afterDeadline nonReentrant {
+  function finalize() external afterDeadline nonReentrant {
     bool success = totalPledged >= goal;
     if (success) {
       status = Status.Successful;
-      (bool ok, ) = payable(creator).call{value: address(this).balance}("");
-      require(ok, "CREATOR_XFER_FAIL");
       emit Finalized(true);
+
+      ICampaignFactory fac = ICampaignFactory(factory);
+      uint16 bps = fac.feeBps();
+      address tre = fac.treasury();
+
+      uint256 bal = address(this).balance;
+      uint256 fee = (bps == 0) ? 0 : (bal * bps) / 10_000;
+
+      if (fee > 0) {
+        (bool okF, ) = payable(tre).call{value: fee}("");
+        require(okF, "FEE_XFER_FAIL");
+        bal -= fee;
+      }
+
+      (bool okC, ) = payable(creator).call{value: bal}("");
+      require(okC, "CREATOR_XFER_FAIL");
     } else {
       status = Status.Failed;
       emit Finalized(false);
@@ -101,7 +116,7 @@ contract Campaign is ReentrancyGuard {
     emit Refunded(msg.sender, amount);
   }
 
-  function cancel() external onlyCreator nonReentrant {
+  function cancel() external onlyCreator {
     require(status == Status.Active, "CAMPAIGN_NOT_ACTIVE");
     require(totalPledged == 0, "CAMPAIGN_HAS_PLEDGE");
     status = Status.Cancelled;

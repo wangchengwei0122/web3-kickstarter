@@ -1,32 +1,25 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.30;
 import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 import {Campaign} from "./Campaign.sol";
 
-// struct Campaign {
-//   address creator; // 创建者
-//   uint256 goal; //目标金额
-//   uint256 deadline; // 截止时间
-//   uint256 totalPledged; // 已筹金额
-//   uint256 status; // 状态
-//   mapping(address => uint256) pledges; // 出资
-//   mapping(address => uint256) rewards; // 奖励
-//   mapping(address => uint256) milestones; // 里程碑
-// }
-
 contract CampaignFactory is Ownable {
-  address treasury; // 资金库
-  uint16 feeBps; // 平台费
+  address public treasury; // 资金库
+  uint16 public feeBps; // 平台费
 
   address[] public campaigns;
+  bool public paused;
+  mapping(address => bool) public bannedCreators;
 
   event CampaignCreated(address campaign, address indexed creator, uint256 indexed id);
   event FeeBpsUpdated(uint16 oldFee, uint16 newFee);
   event TreasuryUpdated(address oldTreasury, address newTreasury);
+  event Paused(bool paused);
+  event CreatorBanned(address indexed creator, bool banned);
 
   constructor(address _treasury, uint16 _feeBps) Ownable(msg.sender) {
     require(_treasury != address(0), "INVALID_TREASURY");
-    require(_feeBps > 0 && _feeBps <= 10000, "INVALID_FEE_BPS");
+    require(_feeBps <= 10_000, "FEE_TOO_HIGH");
 
     treasury = _treasury;
     feeBps = _feeBps;
@@ -48,11 +41,23 @@ contract CampaignFactory is Ownable {
     return campaigns.length;
   }
 
+  function setPaused(bool _p) external onlyOwner {
+    paused = _p;
+    emit Paused(_p);
+  }
+
+  function setBanned(address creator, bool banned) external onlyOwner {
+    bannedCreators[creator] = banned;
+    emit CreatorBanned(creator, banned);
+  }
+
   function createCampaign(
     uint256 goal,
     uint64 deadline,
     string memory metadataURI
   ) external returns (address campaign) {
+    require(!paused, "PAUSED");
+    require(!bannedCreators[msg.sender], "CREATOR_BANNED");
     require(goal > 0, "INVALID_GOAL");
     require(deadline > block.timestamp, "INVALID_DEADLINE");
     require(bytes(metadataURI).length > 0, "INVALID_METADATA_URI");

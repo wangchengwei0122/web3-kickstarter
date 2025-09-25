@@ -8,7 +8,7 @@
     "dev:anvil": "anvil -p 8545",
     "dev": "concurrently -k -n anvil,web \"pnpm dev:anvil\" \"pnpm dev:web\"",
     "contracts:build": "pnpm --filter @packages/contracts exec forge build",
-    "contracts:deploy:local:auto": "bash scripts/deploy-local.sh",
+    "contracts:deploy:local:auto": "bash scripts/deploy_all.sh",
     "prepare": "husky install",
     "commit": "git-cz"
   },
