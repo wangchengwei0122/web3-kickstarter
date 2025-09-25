@@ -8,11 +8,13 @@ export type ProjectSummary = {
   pledgedAmount: number;
   deadline: string; // ISO string for now
   status: ProjectStatus;
+  creator: string;
+  category: string;
+  imageUrl: string;
 };
 
 export type ProjectDetail = ProjectSummary & {
   description: string;
   owner: string;
-  category?: string;
   backerCount: number;
 };

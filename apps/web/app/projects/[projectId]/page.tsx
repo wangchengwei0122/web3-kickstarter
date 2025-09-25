@@ -16,6 +16,9 @@ const mockProjects: Record<string, ProjectDetail> = {
     owner: "0x1234...ABCD",
     backerCount: 128,
     category: "新能源",
+    creator: "GreenGrid",
+    imageUrl:
+      "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=1600&q=80",
   },
   beta: {
     id: "beta",
@@ -30,6 +33,9 @@ const mockProjects: Record<string, ProjectDetail> = {
     owner: "0x5678...EFGH",
     backerCount: 312,
     category: "公益",
+    creator: "OpenAid",
+    imageUrl:
+      "https://images.unsplash.com/photo-1455849318743-b2233052fcff?auto=format&fit=crop&w=1600&q=80",
   },
   gamma: {
     id: "gamma",
@@ -44,6 +50,9 @@ const mockProjects: Record<string, ProjectDetail> = {
     owner: "0x9ABC...1234",
     backerCount: 45,
     category: "创作者经济",
+    creator: "CreatorVerse",
+    imageUrl:
+      "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1600&q=80",
   },
 };
 
