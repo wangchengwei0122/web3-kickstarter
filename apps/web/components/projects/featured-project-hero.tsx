@@ -1,30 +1,34 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { ProjectSummary } from "./types";
 
-function formatPercentage(numerator: number, denominator: number) {
-  if (!denominator) {
-    return 0;
-  }
-
-  return Math.min(1, numerator / denominator);
-}
-
-function getDaysLeft(deadline: string) {
-  const millisLeft = new Date(deadline).getTime() - Date.now();
-  const days = Math.max(0, Math.ceil(millisLeft / (1000 * 60 * 60 * 24)));
-  return days;
-}
-
 export type FeaturedProjectHeroProps = {
   project: ProjectSummary;
 };
 
 export function FeaturedProjectHero({ project }: FeaturedProjectHeroProps) {
-  const progress = formatPercentage(project.pledgedAmount, project.goalAmount);
-  const daysLeft = getDaysLeft(project.deadline);
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    const millisLeft = new Date(project.deadline).getTime() - Date.now();
+    const days = Math.max(0, Math.ceil(millisLeft / (1000 * 60 * 60 * 24)));
+    setDaysLeft(days);
+  }, [project.deadline]);
+
+  const progress = (() => {
+    if (typeof project.progress === "number") {
+      return Math.max(0, Math.min(1, project.progress));
+    }
+    if (project.goalAmount === 0) {
+      return 0;
+    }
+    return Math.min(project.pledgedAmount / project.goalAmount, 1);
+  })();
 
   return (
     <section className="grid gap-8 rounded-[32px] bg-white p-6 shadow-xl shadow-blue-950/5 ring-1 ring-slate-900/5 lg:grid-cols-[1.1fr_1fr]">
@@ -56,7 +60,7 @@ export function FeaturedProjectHero({ project }: FeaturedProjectHeroProps) {
         <div className="space-y-4">
           <div className="flex items-center justify-between text-sm font-medium text-slate-600">
             <span>{Math.round(progress * 100)}% 已筹集</span>
-            <span className="text-slate-500">剩余 {daysLeft} 天</span>
+            <span className="text-slate-500">剩余 {daysLeft ?? "--"} 天</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
             <div

@@ -4,11 +4,15 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev:web": "pnpm --filter @apps/web dev",
     "dev:anvil": "anvil -p 8545",
-    "dev": "concurrently -k -n anvil,web \"pnpm dev:anvil\" \"pnpm dev:web\"",
+    "dev:edge": "pnpm --filter @apps/edge dev",
+    "dev:web": "pnpm --filter @apps/web dev",
+    "dev": "concurrently -k -n anvil,edge,web \"pnpm dev:anvil\" \"pnpm dev:edge\" \"pnpm dev:web\"",
     "contracts:build": "pnpm --filter @packages/contracts exec forge build",
     "contracts:deploy:local:auto": "bash scripts/deploy_all.sh",
+    "deploy:edge": "pnpm --filter @apps/edge deploy",
+    "edge:kv:create": "pnpm --filter @apps/edge kv:create",
+    "edge:kv:create:preview": "pnpm --filter @apps/edge kv:create:preview",
     "prepare": "husky install",
     "commit": "git-cz"
   },

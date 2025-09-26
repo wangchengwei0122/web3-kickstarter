@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 import type { ProjectSummary } from "./types";
 
 export type ProjectCardProps = {
@@ -18,30 +22,32 @@ const statusClassName: Record<ProjectSummary["status"], string> = {
   cancelled: "bg-slate-100 text-slate-500",
 };
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function getProgressValue(project: ProjectSummary) {
-  if (project.goalAmount === 0) {
-    return 0;
+function formatEth(value: number) {
+  if (!Number.isFinite(value)) {
+    return "0 ETH";
   }
-
-  return Math.min(project.pledgedAmount / project.goalAmount, 1);
-}
-
-function getDaysLeft(deadline: string) {
-  const millisLeft = new Date(deadline).getTime() - Date.now();
-  return Math.max(0, Math.ceil(millisLeft / (1000 * 60 * 60 * 24)));
+  return `${value.toLocaleString("zh-CN", { maximumFractionDigits: 2 })} ETH`;
 }
 
 export function ProjectCard({ project }: ProjectCardProps) {
-  const progress = getProgressValue(project);
-  const daysLeft = getDaysLeft(project.deadline);
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    const deadlineMillis = new Date(project.deadline).getTime();
+    const millisLeft = deadlineMillis - Date.now();
+    const days = Math.max(0, Math.ceil(millisLeft / (1000 * 60 * 60 * 24)));
+    setDaysLeft(days);
+  }, [project.deadline]);
+
+  const progress = (() => {
+    if (typeof project.progress === "number") {
+      return Math.max(0, Math.min(1, project.progress));
+    }
+    if (project.goalAmount === 0) {
+      return 0;
+    }
+    return Math.min(project.pledgedAmount / project.goalAmount, 1);
+  })();
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[28px] bg-white shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl">
@@ -72,8 +78,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between text-sm font-medium text-slate-600">
-            <span>{formatCurrency(project.pledgedAmount)}</span>
-            <span className="text-slate-400">目标 {formatCurrency(project.goalAmount)}</span>
+            <span>{formatEth(project.pledgedAmount)}</span>
+            <span className="text-slate-400">目标 {formatEth(project.goalAmount)}</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
             <div
@@ -83,7 +89,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
           </div>
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span>进度 {Math.round(progress * 100)}%</span>
-            <span>{daysLeft} 天剩余</span>
+            <span>{daysLeft ?? "--"} 天剩余</span>
           </div>
         </div>
 

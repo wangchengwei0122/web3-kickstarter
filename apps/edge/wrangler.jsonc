@@ -1,0 +1,31 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// 基本信息
+	"name": "crowdfunding-edge",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-15",
+	"workers_dev": true,
+	// 定时任务（cron）
+	"triggers": {
+		"crons": [
+			"*/1 * * * *"
+		]
+	},
+	// 绑定的 KV 命名空间
+	"kv_namespaces": [
+		{
+			"binding": "KV",
+			// 运行 `wrangler kv:namespace create KV` 后将 id 写到这里；
+			// 本地预览可使用 preview_id（`wrangler kv:namespace create --preview KV`）
+			"id": "<KV_NAMESPACE_ID>",
+			"preview_id": "<KV_NAMESPACE_PREVIEW_ID>"
+		}
+	],
+	// 环境变量
+	"vars": {
+		"RPC_URL": "<RPC_URL>",
+		"CHAIN_ID": "<CHAIN_ID>",
+		"FACTORY": "<FACTORY_ADDRESS>",
+		"DEPLOY_BLOCK": "<DEPLOY_BLOCK>"
+	}
+}

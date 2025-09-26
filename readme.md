@@ -13,13 +13,13 @@ pnpm install
 
 ## 🚀 启动开发环境
 
-一键启动本地链 + 前端
+一键启动 Cloudflare Worker + Web 前端
 
 ```bash
 pnpm dev
 ```
 
-- Anvil: http://127.0.0.1:8545
+- Edge Worker (Wrangler): http://127.0.0.1:8787
 - Next.js: http://localhost:3000
 
 ## 🔨 编译合约
@@ -49,6 +49,15 @@ pnpm contracts:deploy:local:auto
 ✅ 合约地址：0x5FbDB2...
 ✅ ABI 和地址已写入：apps/web/lib/abi
 ```
+
+## 🛰️ Edge Worker
+
+- 独立启动：`pnpm dev:edge`
+- 前端独立启动：`pnpm dev:web`
+- 部署：`pnpm deploy:edge`
+- 创建 KV（写入 wrangler.toml 的 id/preview_id）：
+  - 生产：`pnpm edge:kv:create`
+  - 预览：`pnpm edge:kv:create:preview`
 
 ## 🛠️ 前端调用合约
 

@@ -1,0 +1,5 @@
+{
+  "chainId": "<CHAIN_ID>",
+  "factory": "<FACTORY_ADDRESS>",
+  "deployBlock": "<DEPLOY_BLOCK>"
+}
