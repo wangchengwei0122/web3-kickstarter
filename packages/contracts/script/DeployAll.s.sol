@@ -5,7 +5,6 @@ import {Script, console2} from "forge-std/Script.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 
 import {CampaignFactory} from "../src/CampaignFactory.sol";
-import {ICampaignFactory} from "../src/ICampaignFactory.sol";
 
 contract DeployAll is Script {
   using stdJson for string;
@@ -40,12 +39,11 @@ contract DeployAll is Script {
     string memory root = vm.projectRoot();
     string memory path = string.concat(root, "/deployments/", vm.toString(block.chainid), ".json");
 
-    // 组织 JSON：{ "CampaignFactory":"0x..", "SampleCampaign":"0x.." }
+    // 组织 JSON：{ "chainId": "31337", "factory": "0x..", "deployBlock": "12345" }
     string memory json;
-    json = vm.serializeAddress("addrs", "CampaignFactory", address(factory));
-    if (campaignAddr != address(0)) {
-      json = vm.serializeAddress("addrs", "SampleCampaign", campaignAddr);
-    }
+    json = vm.serializeUint("deployment", "chainId", block.chainid);
+    json = vm.serializeAddress("deployment", "factory", address(factory));
+    json = vm.serializeUint("deployment", "deployBlock", block.number);
     vm.writeJson(json, path);
 
     console2.log("Wrote deployment file:", path);
