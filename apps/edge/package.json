@@ -13,6 +13,7 @@
     "kv:binding": "wrangler kv:namespace list"
   },
   "dependencies": {
+    "@packages/contracts": "workspace:*",
     "viem": "^2.21.4"
   },
   "devDependencies": {

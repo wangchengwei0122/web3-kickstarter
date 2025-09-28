@@ -1,4 +1,5 @@
-import { createPublicClient, http, parseAbi, parseAbiItem, type Address } from "viem";
+import { createPublicClient, http, type AbiEvent, type Address } from "viem";
+import { campaignAbi, campaignFactoryAbi } from "@packages/contracts/abi";
 
 const LATEST_INDEX_KEY = "kv:crowd:index";
 const DEADLINE_INDEX_KEY = "kv:crowd:index:deadline";
@@ -9,14 +10,7 @@ const MAX_INDEX_SIZE = 1024;
 const MAX_RETRIES = 4;
 const RETRY_DELAY_MS = 750;
 
-const campaignAbi = parseAbi([
-  "function getSummary() view returns (address creator, uint256 goal, uint64 deadline, uint8 status, uint256 totalPledged)",
-  "function metadataURI() view returns (string)"
-]);
-
-const campaignCreatedEvent = parseAbiItem(
-  "event CampaignCreated(address indexed campaign, address indexed creator, uint256 indexed id)"
-);
+const campaignCreatedEvent = getCampaignCreatedEvent();
 
 interface CampaignRecord {
   address: Address;
@@ -78,6 +72,16 @@ function jsonResponse(body: unknown, init: ResponseInit = {}) {
 
 const isValidAddress = (value: string): value is Address => /^0x[a-fA-F0-9]{40}$/.test(value);
 const normaliseAddress = (value: string) => value.toLowerCase();
+
+function getCampaignCreatedEvent(): AbiEvent {
+  const event = campaignFactoryAbi.find(
+    (item): item is AbiEvent => item.type === "event" && item.name === "CampaignCreated"
+  );
+  if (!event) {
+    throw new Error("CampaignCreated event not found in factory ABI");
+  }
+  return event;
+}
 
 async function withRetry<T>(operation: () => Promise<T>, attempt = 0): Promise<T> {
   try {

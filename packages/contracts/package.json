@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
+  "exports": {
+    "./abi": "./abi/index.ts",
+    "./abi/*": "./abi/*"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "forge build"

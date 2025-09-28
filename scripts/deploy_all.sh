@@ -35,6 +35,12 @@ mkdir -p "$DEST_DIR"
 cp out/CampaignFactory.sol/CampaignFactory.json "$DEST_DIR/CampaignFactory.json" 2>/dev/null || true
 cp out/Campaign.sol/Campaign.json             "$DEST_DIR/Campaign.json"         2>/dev/null || true
 
+# ====== 拷贝 ABI 到共享目录（前端 / Worker 共用） ======
+SHARED_ABI_DIR="$REPO_ROOT/packages/contracts/abi"
+mkdir -p "$SHARED_ABI_DIR"
+cp out/CampaignFactory.sol/CampaignFactory.json "$SHARED_ABI_DIR/CampaignFactory.json" 2>/dev/null || true
+cp out/Campaign.sol/Campaign.json             "$SHARED_ABI_DIR/Campaign.json"         2>/dev/null || true
+
 # ====== 输出地址文件位置 ======
 CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
 DEPLOY_FILE="$REPO_ROOT/packages/contracts/deployments/$CHAIN_ID.json"

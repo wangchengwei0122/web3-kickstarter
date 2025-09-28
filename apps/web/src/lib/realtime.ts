@@ -1,10 +1,7 @@
-import { createPublicClient, http, parseAbi, type Address } from "viem";
+import { createPublicClient, http, type Address } from "viem";
+import { campaignAbi } from "@packages/contracts/abi";
 
 import type { EdgeCampaign } from "./edge";
-
-const summaryAbi = parseAbi([
-  "function getSummary() view returns (address creator, uint256 goal, uint64 deadline, uint8 status, uint256 totalPledged)"
-]);
 
 function resolveEnv(key: string) {
   const value = process.env[key];
@@ -56,7 +53,7 @@ export async function patchCampaignsRealtime(campaigns: EdgeCampaign[]): Promise
 
   const contracts = campaigns.map((campaign) => ({
     address: campaign.address as Address,
-    abi: summaryAbi,
+    abi: campaignAbi,
     functionName: "getSummary" as const
   }));
 

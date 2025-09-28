@@ -44,6 +44,9 @@ importers:
 
   apps/edge:
     dependencies:
+      '@packages/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       viem:
         specifier: ^2.21.4
         version: 2.37.6(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@3.22.4)
@@ -60,6 +63,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@packages/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@radix-ui/react-alert-dialog':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)

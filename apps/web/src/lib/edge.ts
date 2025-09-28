@@ -1,11 +1,5 @@
-import {
-  createPublicClient,
-  http,
-  parseAbi,
-  parseAbiItem,
-  type Address,
-  type PublicClient,
-} from 'viem';
+import { createPublicClient, http, type AbiEvent, type Address, type PublicClient } from 'viem';
+import { campaignAbi, campaignFactoryAbi } from '@packages/contracts/abi';
 import deployment from '../../../../packages/contracts/deployments/31337.json';
 
 type DeploymentManifest = {
@@ -44,18 +38,19 @@ export type FetchCampaignOptions = {
   sort?: 'latest' | 'deadline';
 };
 
-// const campaignCreatedEvent = parseAbiItem(
-//   'event CampaignCreated(address indexed campaign, address indexed creator, uint256 indexed id)'
-// );
-
-// const campaignAbi = parseAbi([
-//   'function getSummary() view returns (address creator, uint256 goal, uint64 deadline, uint8 status, uint256 totalPledged)',
-//   'function metadataURI() view returns (string)',
-// ]);
-
-// const campaignCreatedEvent = {
-
 const DEFAULT_LIMIT = 12;
+
+const campaignCreatedEvent = getCampaignCreatedEvent();
+
+function getCampaignCreatedEvent(): AbiEvent {
+  const event = campaignFactoryAbi.find(
+    (item): item is AbiEvent => item.type === 'event' && item.name === 'CampaignCreated'
+  );
+  if (!event) {
+    throw new Error('CampaignCreated event missing from factory ABI');
+  }
+  return event;
+}
 
 function resolveEnv(key: string) {
   const value = process.env[key];
@@ -113,7 +108,7 @@ async function fetchFromEdge(
 }
 
 async function fetchDirectOnChain(limit: number, cursor: number): Promise<CampaignPage> {
-  const rpcUrl = process.env.NEXT_PUBLIC_RPC_HTTP || '127.0.0.1:8545';
+  const rpcUrl = process.env.NEXT_PUBLIC_RPC_HTTP || 'http://127.0.0.1:8545';
 
   const chainId = parseNumeric(resolveEnv('NEXT_PUBLIC_CHAIN_ID')) ?? manifest.chainId;
 
