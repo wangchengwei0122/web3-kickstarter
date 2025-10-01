@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
+
+import { SiteNavbar } from '@/components/site-navbar';
 import { Web3Provider } from './web3-provider';
 import './globals.css';
 
@@ -25,8 +27,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <Web3Provider>{children}</Web3Provider>
+      <body className={`${geistSans.variable} ${geistMono.variable} bg-slate-50 antialiased`}>
+        <Web3Provider>
+          <div className="min-h-screen">
+            <SiteNavbar />
+            <div className="pb-16 pt-6">{children}</div>
+          </div>
+        </Web3Provider>
       </body>
     </html>
   );
