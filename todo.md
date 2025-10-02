@@ -36,8 +36,6 @@ MVP 必备 1. CampaignFactory（项目工厂）
 • 可升级性：用 UUPS/Clone（Minimal Proxy）降低部署 gas。
 • 可观察性：所有关键路径都 emit 事件，便于前端/索引。
 
-前端信息架构
-
 MVP 页面1. 首页/发现（/）
 
     •	卡片流：项目封面、标题、简述、进度条（pledged/goal）、剩余时间、状态。
