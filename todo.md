@@ -2,10 +2,10 @@
 
 MVP 必备 1. CampaignFactory（项目工厂）
 
-    •	作用：创建与登记项目，收平台费（可选）。
-    •	关键状态：owner（平台方）、feeBps、campaigns[]。
+    •	作用：创建与登记项目，收平台费（可选）。 DONE
+    •	关键状态：owner（平台方）、feeBps、campaigns[]。 DONE
     •	主要函数：
-    •	createCampaign(params) → 返回新 Campaign 地址
+    •	createCampaign(params) → 返回新 Campaign 地址 DONE
     •	setFeeBps(uint16)（onlyOwner）
     •	事件：CampaignCreated(campaign, creator, id)。
 
