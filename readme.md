@@ -13,7 +13,7 @@ pnpm install
 
 ## 🚀 启动开发环境
 
-一键启动 Cloudflare Worker + Web 前端
+一键启动 Cloudflare Worker + Web 前端 + anvil本地链
 
 ```bash
 pnpm dev
