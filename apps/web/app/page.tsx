@@ -1,50 +1,50 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
 
-import { Button } from "@/components/ui/button";
-import { ProjectList } from "@/components/projects/project-list";
-import type { ProjectSummary } from "@/components/projects/types";
-import { FeaturedProjectHero } from "@/components/projects/featured-project-hero";
-import { useExplore } from "@/src/hooks/useExplore";
+import { Button } from '@/components/ui/button';
+import { ProjectList } from '@/components/projects/project-list';
+import type { ProjectSummary } from '@/components/projects/types';
+import { FeaturedProjectHero } from '@/components/projects/featured-project-hero';
+import { useExplore } from '@/src/hooks/useExplore';
 
 const FALLBACK_FEATURED: ProjectSummary = {
-  id: "eco-farm",
-  title: "生态友好城市农业计划",
-  summary: "支持在城市社区建设智能立体农场，推广绿色饮食与社区共享。",
-  creator: "GreenThumb DAO",
+  id: 'eco-farm',
+  title: '生态友好城市农业计划',
+  summary: '支持在城市社区建设智能立体农场，推广绿色饮食与社区共享。',
+  creator: 'GreenThumb DAO',
   goalAmount: 100000,
   pledgedAmount: 75000,
   deadline: new Date(Date.now() + 1000 * 60 * 60 * 24 * 12).toISOString(),
-  status: "active",
-  category: "可持续发展",
+  status: 'active',
+  category: '可持续发展',
   imageUrl:
-    "https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1600&q=80",
+    'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1600&q=80',
 };
 
 const sortTabs = [
-  { key: "latest", label: "最新" },
-  { key: "deadline", label: "快到期" },
-  { key: "progress", label: "目标接近" }
+  { key: 'latest', label: '最新' },
+  { key: 'deadline', label: '快到期' },
+  { key: 'progress', label: '目标接近' },
 ] as const;
 
-type SortKey = (typeof sortTabs)[number]["key"];
+type SortKey = (typeof sortTabs)[number]['key'];
 
 export default function HomePage() {
-  const [sortKey, setSortKey] = useState<SortKey>("latest");
+  const [sortKey, setSortKey] = useState<SortKey>('latest');
   const { projects, isLoading, isError, hasMore, loadMore, source } = useExplore();
 
   const sortedProjects = useMemo(() => {
     if (projects.length === 0) {
       return projects;
     }
-    if (sortKey === "deadline") {
+    if (sortKey === 'deadline') {
       return [...projects].sort(
         (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
       );
     }
-    if (sortKey === "progress") {
+    if (sortKey === 'progress') {
       return [...projects].sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0));
     }
     return projects;
@@ -60,11 +60,9 @@ export default function HomePage() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-              探索项目
+              DiscoverDiscover
             </h2>
-            <p className="text-sm text-slate-500">
-              精选社区发起的优质项目，发现与你同频的使命。
-            </p>
+            <p className="text-sm text-slate-500">精选社区发起的优质项目，发现与你同频的使命。</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex rounded-full bg-slate-100 p-1">
@@ -73,7 +71,7 @@ export default function HomePage() {
                   key={tab.key}
                   type="button"
                   onClick={() => setSortKey(tab.key)}
-                  className={`rounded-full px-4 py-1 text-sm font-medium transition ${sortKey === tab.key ? "bg-white shadow-sm" : "text-slate-500"}`}
+                  className={`rounded-full px-4 py-1 text-sm font-medium transition ${sortKey === tab.key ? 'bg-white shadow-sm' : 'text-slate-500'}`}
                   disabled={sortKey === tab.key}
                 >
                   {tab.label}
@@ -108,10 +106,17 @@ export default function HomePage() {
 
         {projects.length > 0 && (
           <div className="flex flex-col gap-3">
-            <p className="text-xs text-slate-400">数据来源：{source === "edge" ? "边缘缓存" : "链上回退"}</p>
+            <p className="text-xs text-slate-400">
+              数据来源：{source === 'edge' ? '边缘缓存' : '链上回退'}
+            </p>
             <div className="flex items-center justify-center">
-              <Button onClick={loadMore} disabled={!hasMore || isLoading} variant="outline" className="rounded-full px-6">
-                {hasMore ? (isLoading ? "加载中..." : "加载更多") : "没有更多项目"}
+              <Button
+                onClick={loadMore}
+                disabled={!hasMore || isLoading}
+                variant="outline"
+                className="rounded-full px-6"
+              >
+                {hasMore ? (isLoading ? '加载中...' : '加载更多') : '没有更多项目'}
               </Button>
             </div>
           </div>

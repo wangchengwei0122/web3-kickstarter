@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 const navItems = [
-  { href: "/", label: "探索项目" },
-  { href: "/create", label: "创建项目" },
-  { href: "/account", label: "我的" }
+  { href: '/', label: 'Discover' },
+  { href: '/create', label: 'Create' },
+  { href: '/account', label: 'Account' },
 ];
 
 export function SiteNavbar() {
@@ -25,12 +25,13 @@ export function SiteNavbar() {
 
         <nav className="hidden items-center gap-8 text-sm font-medium text-slate-500 md:flex">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
+            const isActive =
+              pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`transition hover:text-slate-900 ${isActive ? "text-slate-900" : ""}`}
+                className={`transition hover:text-slate-900 ${isActive ? 'text-slate-900' : ''}`}
               >
                 {item.label}
               </Link>
