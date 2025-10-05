@@ -43,11 +43,7 @@ export default function CreatePage() {
   const [txHash, setTxHash] = useState<Hash | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const {
-    writeContractAsync,
-    isPending: isWriting,
-    error: writeError,
-  } = useWriteContract();
+  const { writeContractAsync, isPending: isWriting, error: writeError } = useWriteContract();
 
   const {
     isLoading: isConfirming,
@@ -114,14 +110,14 @@ export default function CreatePage() {
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-12">
       <header className="space-y-3">
         <p className="text-sm font-semibold uppercase tracking-widest text-sky-500">Create</p>
-        <h1 className="text-3xl font-semibold text-slate-900">发起全新的众筹项目</h1>
+        <h1 className="text-3xl font-semibold text-slate-900">Create</h1>
         <p className="text-sm text-slate-500">{formHint}</p>
       </header>
 
       <form className="grid gap-8" aria-labelledby="create-project-form" onSubmit={handleSubmit}>
         <Card className="rounded-[28px] border-0 bg-white shadow-xl shadow-slate-900/5 ring-1 ring-slate-900/5">
           <CardHeader className="px-8">
-            <CardTitle className="text-xl text-slate-900">项目概览</CardTitle>
+            <CardTitle className="text-xl text-slate-900">Project Overview</CardTitle>
             <CardDescription className="text-sm text-slate-500">
               提供标题、简介与详细描述，帮助支持者了解你的核心理念。
             </CardDescription>
@@ -131,13 +127,23 @@ export default function CreatePage() {
               <label className="text-sm font-medium text-slate-700" htmlFor="title">
                 项目标题
               </label>
-              <Input id="title" name="title" placeholder="例如：下一代可持续能源电池" className="h-11 rounded-xl px-4" />
+              <Input
+                id="title"
+                name="title"
+                placeholder="例如：下一代可持续能源电池"
+                className="h-11 rounded-xl px-4"
+              />
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="tagline">
                 宣传语 / 简短介绍
               </label>
-              <Input id="tagline" name="tagline" placeholder="一句话告诉大家你的项目亮点" className="h-11 rounded-xl px-4" />
+              <Input
+                id="tagline"
+                name="tagline"
+                placeholder="一句话告诉大家你的项目亮点"
+                className="h-11 rounded-xl px-4"
+              />
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="description">
@@ -156,7 +162,7 @@ export default function CreatePage() {
 
         <Card className="rounded-[28px] border-0 bg-white shadow-xl shadow-slate-900/5 ring-1 ring-slate-900/5">
           <CardHeader className="px-8">
-            <CardTitle className="text-xl text-slate-900">融资目标</CardTitle>
+            <CardTitle className="text-xl text-slate-900">Funding Goal</CardTitle>
             <CardDescription className="text-sm text-slate-500">
               设置众筹目标金额与关键节点，确保时间线清晰可信。
             </CardDescription>
@@ -171,14 +177,14 @@ export default function CreatePage() {
               </div>
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-slate-700" htmlFor="deadline">
-                  截止日期
+                  Deadline
                 </label>
                 <Input id="deadline" name="deadline" type="date" className="h-11 rounded-xl px-4" />
               </div>
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="milestone">
-                关键里程碑
+                Key Milestones
               </label>
               <textarea
                 id="milestone"
@@ -193,7 +199,7 @@ export default function CreatePage() {
 
         <Card className="rounded-[28px] border-0 bg-white shadow-xl shadow-slate-900/5 ring-1 ring-slate-900/5">
           <CardHeader className="px-8">
-            <CardTitle className="text-xl text-slate-900">展示与分类</CardTitle>
+            <CardTitle className="text-xl text-slate-900">Display & Category</CardTitle>
             <CardDescription className="text-sm text-slate-500">
               上传封面、选择分类并提供对外展示的媒体链接。
             </CardDescription>
@@ -216,14 +222,24 @@ export default function CreatePage() {
                 <label className="text-sm font-medium text-slate-700" htmlFor="cover">
                   封面图片 URL
                 </label>
-                <Input id="cover" name="cover" placeholder="https://..." className="h-11 rounded-xl px-4" />
+                <Input
+                  id="cover"
+                  name="cover"
+                  placeholder="https://..."
+                  className="h-11 rounded-xl px-4"
+                />
               </div>
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="metadata">
                 元数据 URI
               </label>
-              <Input id="metadata" name="metadata" placeholder="ipfs://your-metadata.json" className="h-11 rounded-xl px-4" />
+              <Input
+                id="metadata"
+                name="metadata"
+                placeholder="ipfs://your-metadata.json"
+                className="h-11 rounded-xl px-4"
+              />
             </div>
             <p className="text-xs text-slate-400">
               提示：正式发布前，请确保元数据可被公开访问并符合平台规范。
@@ -235,7 +251,9 @@ export default function CreatePage() {
           <span className="text-base font-medium text-slate-800">项目发布</span>
           <p>提交后将发起链上交易，由工厂合约创建新的 Campaign 并纳入索引。</p>
           {formError && <p className="text-sm text-rose-500">{formError}</p>}
-          {writeError && !formError && <p className="text-sm text-rose-500">{writeError.message}</p>}
+          {writeError && !formError && (
+            <p className="text-sm text-rose-500">{writeError.message}</p>
+          )}
           {txHash && (
             <div className="rounded-2xl bg-slate-100 p-4 text-xs text-slate-600">
               <p className="font-medium text-slate-700">交易哈希</p>
@@ -248,7 +266,11 @@ export default function CreatePage() {
             </div>
           )}
           <div className="flex flex-wrap gap-3">
-            <Button type="submit" disabled={!isConnected || isWriting || isConfirming} className="rounded-full px-6">
+            <Button
+              type="submit"
+              disabled={!isConnected || isWriting || isConfirming}
+              className="rounded-full px-6"
+            >
               {isWriting || isConfirming ? '提交中...' : isSuccess ? '已创建' : '提交创建'}
             </Button>
             <Button asChild variant="outline" className="rounded-full px-6">
