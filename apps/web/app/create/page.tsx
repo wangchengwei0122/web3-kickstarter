@@ -13,9 +13,10 @@ import { Input } from '@/components/ui/input';
 import { campaignFactoryAbi } from '@packages/contracts/abi';
 import deployment from '../../../../packages/contracts/deployments/31337.json';
 
-const categories = ['科技', '艺术', '教育', '环境', '社会影响', '生活方式'];
+const categories = ['Technology', 'Art', 'Education', 'Environment', 'Social Impact', 'Lifestyle'];
 
-const formHint = '填写项目信息后提交，上链即可创建新的众筹合约。';
+const formHint =
+  'Fill in the project information and submit to create a new crowdfunding contract on-chain.';
 
 const controlClass =
   'w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100';
@@ -65,24 +66,24 @@ export default function CreatePage() {
       const metadataURI = (form.get('metadata') as string)?.trim();
 
       if (!title || !tagline || !description) {
-        setFormError('请完整填写项目标题、宣传语与详情。');
+        setFormError('Please fill in the project title, tagline, and description.');
         return;
       }
       if (!goalInput || Number(goalInput) <= 0) {
-        setFormError('请填写有效的目标金额 (ETH)。');
+        setFormError('Please fill in a valid funding goal (ETH).');
         return;
       }
       if (!deadlineInput) {
-        setFormError('请选择截止日期。');
+        setFormError('Please select a deadline.');
         return;
       }
       const deadline = Math.floor(new Date(`${deadlineInput}T00:00:00Z`).getTime() / 1000);
       if (!Number.isFinite(deadline) || deadline <= Math.floor(Date.now() / 1000)) {
-        setFormError('截止日期必须晚于当前时间。');
+        setFormError('The deadline must be later than the current time.');
         return;
       }
       if (!metadataURI) {
-        setFormError('请提供项目元数据 URI (例如 IPFS 链接)。');
+        setFormError('Please provide a project metadata URI (e.g., IPFS link).');
         return;
       }
 
@@ -99,7 +100,7 @@ export default function CreatePage() {
         if (error instanceof Error) {
           setFormError(error.message);
         } else {
-          setFormError('交易提交失败，请稍后重试。');
+          setFormError('Transaction submission failed, please try again later.');
         }
       }
     },
@@ -119,41 +120,42 @@ export default function CreatePage() {
           <CardHeader className="px-8">
             <CardTitle className="text-xl text-slate-900">Project Overview</CardTitle>
             <CardDescription className="text-sm text-slate-500">
-              提供标题、简介与详细描述，帮助支持者了解你的核心理念。
+              Provide title, tagline, and detailed description to help supporters understand your
+              core vision.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 px-8 pb-8">
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="title">
-                项目标题
+                Project Title
               </label>
               <Input
                 id="title"
                 name="title"
-                placeholder="例如：下一代可持续能源电池"
+                placeholder="e.g., Next-generation Sustainable Energy Battery"
                 className="h-11 rounded-xl px-4"
               />
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="tagline">
-                宣传语 / 简短介绍
+                Tagline / Brief Introduction
               </label>
               <Input
                 id="tagline"
                 name="tagline"
-                placeholder="一句话告诉大家你的项目亮点"
+                placeholder="Tell everyone about your project highlights in one sentence"
                 className="h-11 rounded-xl px-4"
               />
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="description">
-                项目详情
+                Project Details
               </label>
               <textarea
                 id="description"
                 name="description"
                 rows={5}
-                placeholder="展开介绍项目背景、愿景与核心计划..."
+                placeholder="Expand on project background, vision, and core plans..."
                 className={`${controlClass} resize-none`}
               />
             </div>
@@ -164,14 +166,15 @@ export default function CreatePage() {
           <CardHeader className="px-8">
             <CardTitle className="text-xl text-slate-900">Funding Goal</CardTitle>
             <CardDescription className="text-sm text-slate-500">
-              设置众筹目标金额与关键节点，确保时间线清晰可信。
+              Set crowdfunding goal amount and key milestones to ensure a clear and credible
+              timeline.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 px-8 pb-8">
             <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-slate-700" htmlFor="goal">
-                  目标金额 (ETH)
+                  Goal Amount (ETH)
                 </label>
                 <Input id="goal" name="goal" placeholder="10" className="h-11 rounded-xl px-4" />
               </div>
@@ -190,7 +193,7 @@ export default function CreatePage() {
                 id="milestone"
                 name="milestone"
                 rows={3}
-                placeholder="列出达成目标所需的阶段性任务或成果..."
+                placeholder="List the phased tasks or achievements needed to reach the goal..."
                 className={`${controlClass} resize-none`}
               />
             </div>
@@ -201,16 +204,21 @@ export default function CreatePage() {
           <CardHeader className="px-8">
             <CardTitle className="text-xl text-slate-900">Display & Category</CardTitle>
             <CardDescription className="text-sm text-slate-500">
-              上传封面、选择分类并提供对外展示的媒体链接。
+              Upload cover image, select category, and provide media links for public display.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6 px-8 pb-8">
             <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-slate-700" htmlFor="category">
-                  项目分类
+                  Project Category
                 </label>
-                <select id="category" name="category" className={controlClass} defaultValue="科技">
+                <select
+                  id="category"
+                  name="category"
+                  className={controlClass}
+                  defaultValue="Technology"
+                >
                   {categories.map((category) => (
                     <option key={category} value={category}>
                       {category}
@@ -220,7 +228,7 @@ export default function CreatePage() {
               </div>
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-slate-700" htmlFor="cover">
-                  封面图片 URL
+                  Cover Image URL
                 </label>
                 <Input
                   id="cover"
@@ -232,7 +240,7 @@ export default function CreatePage() {
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="metadata">
-                元数据 URI
+                Metadata URI
               </label>
               <Input
                 id="metadata"
@@ -242,25 +250,29 @@ export default function CreatePage() {
               />
             </div>
             <p className="text-xs text-slate-400">
-              提示：正式发布前，请确保元数据可被公开访问并符合平台规范。
+              Tip: Before official release, ensure metadata is publicly accessible and complies with
+              platform standards.
             </p>
           </CardContent>
         </Card>
 
         <div className="flex flex-col gap-4 rounded-[28px] border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-          <span className="text-base font-medium text-slate-800">项目发布</span>
-          <p>提交后将发起链上交易，由工厂合约创建新的 Campaign 并纳入索引。</p>
+          <span className="text-base font-medium text-slate-800">Project Launch</span>
+          <p>
+            After submission, an on-chain transaction will be initiated to create a new Campaign
+            through the factory contract and include it in the index.
+          </p>
           {formError && <p className="text-sm text-rose-500">{formError}</p>}
           {writeError && !formError && (
             <p className="text-sm text-rose-500">{writeError.message}</p>
           )}
           {txHash && (
             <div className="rounded-2xl bg-slate-100 p-4 text-xs text-slate-600">
-              <p className="font-medium text-slate-700">交易哈希</p>
+              <p className="font-medium text-slate-700">Transaction Hash</p>
               <p className="break-all">{txHash}</p>
               {receipt && (
                 <p className="mt-2 text-slate-500">
-                  区块：{Number(receipt.blockNumber)} · Gas：{receipt.gasUsed?.toString()}
+                  Block: {Number(receipt.blockNumber)} · Gas: {receipt.gasUsed?.toString()}
                 </p>
               )}
             </div>
@@ -271,13 +283,21 @@ export default function CreatePage() {
               disabled={!isConnected || isWriting || isConfirming}
               className="rounded-full px-6"
             >
-              {isWriting || isConfirming ? '提交中...' : isSuccess ? '已创建' : '提交创建'}
+              {isWriting || isConfirming
+                ? 'Submitting...'
+                : isSuccess
+                  ? 'Created'
+                  : 'Submit Creation'}
             </Button>
             <Button asChild variant="outline" className="rounded-full px-6">
-              <Link href="/">返回首页</Link>
+              <Link href="/">Back to Home</Link>
             </Button>
           </div>
-          {!isConnected && <p className="text-xs text-slate-400">请先连接钱包以提交交易。</p>}
+          {!isConnected && (
+            <p className="text-xs text-slate-400">
+              Please connect your wallet first to submit the transaction.
+            </p>
+          )}
         </div>
       </form>
     </main>
