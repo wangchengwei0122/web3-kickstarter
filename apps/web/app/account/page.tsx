@@ -1,41 +1,49 @@
-import Link from "next/link";
+'use client';
+import Link from 'next/link';
+import { useAccount, useBalance } from 'wagmi';
+import { formatUnits } from 'viem';
 
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 
 const profile = {
-  address: "0x1234...abcd",
-  balance: "100 ETH",
-  avatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=240&q=80",
-  bio: "探索 Web3 众筹新可能，关注可持续与创意科技。",
+  address: '0x1234...abcd',
+  balance: '100 ETH',
+  avatar:
+    'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=240&q=80',
+  bio: '探索 Web3 众筹新可能，关注可持续与创意科技。',
 };
 
 const supportedProjects = [
   {
-    title: "Innovative Tech Gadget",
-    category: "Technology",
-    description: "A revolutionary gadget that simplifies daily tasks.",
-    image: "https://images.unsplash.com/photo-1527430253228-e93688616381?auto=format&fit=crop&w=640&q=80",
+    title: 'Innovative Tech Gadget',
+    category: 'Technology',
+    description: 'A revolutionary gadget that simplifies daily tasks.',
+    image:
+      'https://images.unsplash.com/photo-1527430253228-e93688616381?auto=format&fit=crop&w=640&q=80',
   },
   {
-    title: "Digital Art Collection",
-    category: "Art",
-    description: "A curated collection of digital art pieces.",
-    image: "https://images.unsplash.com/photo-1600267185393-e158a98703de?auto=format&fit=crop&w=640&q=80",
+    title: 'Digital Art Collection',
+    category: 'Art',
+    description: 'A curated collection of digital art pieces.',
+    image:
+      'https://images.unsplash.com/photo-1600267185393-e158a98703de?auto=format&fit=crop&w=640&q=80',
   },
 ];
 
 const initiatedProjects = [
   {
-    title: "Eco-Friendly Initiative",
-    category: "Environment",
-    description: "A project focused on sustainable living and conservation.",
-    image: "https://images.unsplash.com/photo-1427806208781-b36531cb09ef?auto=format&fit=crop&w=640&q=80",
+    title: 'Eco-Friendly Initiative',
+    category: 'Environment',
+    description: 'A project focused on sustainable living and conservation.',
+    image:
+      'https://images.unsplash.com/photo-1427806208781-b36531cb09ef?auto=format&fit=crop&w=640&q=80',
   },
   {
-    title: "Educational Platform",
-    category: "Education",
-    description: "An online platform offering free educational resources.",
-    image: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=640&q=80",
+    title: 'Educational Platform',
+    category: 'Education',
+    description: 'An online platform offering free educational resources.',
+    image:
+      'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=640&q=80',
   },
 ];
 
@@ -63,7 +71,7 @@ function ProjectCard({ title, category, description, image }: ProjectCardProps) 
       </div>
       <div>
         <Button asChild variant="outline" className="rounded-full px-4 py-2 text-sm">
-          <Link href="#">查看项目</Link>
+          <Link href="#">View Project</Link>
         </Button>
       </div>
     </article>
@@ -89,6 +97,17 @@ function ProjectSection({ title, projects }: { title: string; projects: ProjectC
 }
 
 export default function AccountPage() {
+  const { address } = useAccount();
+  const { data: balance } = useBalance({ address });
+
+  console.log(balance);
+  console.log(balance?.value);
+  console.log(balance?.decimals);
+  console.log(balance?.formatted);
+  if (balance) {
+    console.log(formatUnits(balance.value, balance.decimals));
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 py-12">
       <section className="rounded-[32px] bg-white p-8 shadow-xl shadow-slate-900/5 ring-1 ring-slate-900/5">
@@ -98,16 +117,18 @@ export default function AccountPage() {
               <img src={profile.avatar} alt="Profile" className="h-full w-full object-cover" />
             </div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-semibold text-slate-900">{profile.address}</h1>
-              <p className="text-sm text-slate-500">余额：{profile.balance}</p>
-              <p className="text-sm text-slate-500">{profile.bio}</p>
+              <h1 className="text-2xl font-semibold text-slate-900">{address}</h1>
+              <p className="text-sm text-slate-500">
+                Balance: {balance ? formatUnits(balance.value, balance.decimals) : '—'}
+              </p>
+              <p className="text-sm text-slate-500">{balance?.symbol}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" className="rounded-full px-5">
               编辑资料
             </Button>
-            <Button className="rounded-full px-5">发起新项目</Button>
+            <Button className="rounded-full px-5">Create</Button>
           </div>
         </div>
       </section>
