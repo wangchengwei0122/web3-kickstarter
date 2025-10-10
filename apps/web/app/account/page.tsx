@@ -100,10 +100,6 @@ export default function AccountPage() {
   const { address } = useAccount();
   const { data: balance } = useBalance({ address });
 
-  console.log(balance);
-  console.log(balance?.value);
-  console.log(balance?.decimals);
-  console.log(balance?.formatted);
   if (balance) {
     console.log(formatUnits(balance.value, balance.decimals));
   }
