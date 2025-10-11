@@ -6,8 +6,6 @@ import { formatUnits } from 'viem';
 import { Button } from '@/components/ui/button';
 
 const profile = {
-  address: '0x1234...abcd',
-  balance: '100 ETH',
   avatar:
     'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=240&q=80',
   bio: '探索 Web3 众筹新可能，关注可持续与创意科技。',
