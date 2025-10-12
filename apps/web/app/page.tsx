@@ -11,22 +11,23 @@ import { useExplore } from '@/src/hooks/useExplore';
 
 const FALLBACK_FEATURED: ProjectSummary = {
   id: 'eco-farm',
-  title: '生态友好城市农业计划',
-  summary: '支持在城市社区建设智能立体农场，推广绿色饮食与社区共享。',
+  title: 'Eco-Friendly Urban Agriculture Plan',
+  summary:
+    'Support the construction of smart vertical farms in urban communities, promote green diet and community sharing.',
   creator: 'GreenThumb DAO',
   goalAmount: 100000,
   pledgedAmount: 75000,
   deadline: new Date(Date.now() + 1000 * 60 * 60 * 24 * 12).toISOString(),
   status: 'active',
-  category: '可持续发展',
+  category: 'Sustainability',
   imageUrl:
     'https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=1600&q=80',
 };
 
 const sortTabs = [
-  { key: 'latest', label: '最新' },
-  { key: 'deadline', label: '快到期' },
-  { key: 'progress', label: '目标接近' },
+  { key: 'latest', label: 'Newest' },
+  { key: 'deadline', label: 'Deadline' },
+  { key: 'progress', label: 'Progress' },
 ] as const;
 
 type SortKey = (typeof sortTabs)[number]['key'];
@@ -59,10 +60,11 @@ export default function HomePage() {
       <section className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-              DiscoverDiscover
-            </h2>
-            <p className="text-sm text-slate-500">精选社区发起的优质项目，发现与你同频的使命。</p>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Discover</h2>
+            <p className="text-sm text-slate-500">
+              Discover high-quality projects initiated by the selected communities and find a
+              mission that resonates with you.
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex rounded-full bg-slate-100 p-1">
@@ -79,14 +81,15 @@ export default function HomePage() {
               ))}
             </div>
             <Button asChild variant="outline" className="rounded-full px-5">
-              <Link href="/projects">查看全部</Link>
+              <Link href="/projects">View All</Link>
             </Button>
           </div>
         </div>
 
         {isError && (
           <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 text-sm text-rose-700">
-            Worker 暂不可用，正在尝试直接链上回退。请稍后刷新。
+            Worker is temporarily unavailable, trying to fallback directly to chain. Please refresh
+            later.
           </div>
         )}
 
@@ -107,7 +110,7 @@ export default function HomePage() {
         {projects.length > 0 && (
           <div className="flex flex-col gap-3">
             <p className="text-xs text-slate-400">
-              数据来源：{source === 'edge' ? '边缘缓存' : '链上回退'}
+              Data source: {source === 'edge' ? 'Edge Cache' : 'Chain Fallback'}
             </p>
             <div className="flex items-center justify-center">
               <Button
@@ -116,7 +119,7 @@ export default function HomePage() {
                 variant="outline"
                 className="rounded-full px-6"
               >
-                {hasMore ? (isLoading ? '加载中...' : '加载更多') : '没有更多项目'}
+                {hasMore ? (isLoading ? 'Loading...' : 'Load More') : 'No more projects'}
               </Button>
             </div>
           </div>
