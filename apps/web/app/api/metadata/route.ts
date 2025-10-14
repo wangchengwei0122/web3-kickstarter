@@ -4,12 +4,19 @@ import { pinata } from '@/utils/pinataConfig';
 export async function POST(req: NextRequest) {
   try {
     const data = await req.formData();
-    const file: File | null = data.get('file') as unknown as File;
+    const file = data.get('file');
+
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: 'Missing metadata file' }, { status: 400 });
+    }
+
     const { cid } = await pinata.upload.public.file(file);
-    const url = await pinata.gateways.public.convert(cid);
-    return NextResponse.json(url, { status: 200 });
+    const gatewayUrl = await pinata.gateways.public.convert(cid);
+    const uri = `ipfs://${cid}`;
+
+    return NextResponse.json({ cid, uri, gatewayUrl }, { status: 200 });
   } catch (e) {
-    console.log(e);
+    console.error('[metadata-upload]', e);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

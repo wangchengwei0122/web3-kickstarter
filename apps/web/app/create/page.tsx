@@ -43,6 +43,7 @@ export default function CreatePage() {
 
   const [txHash, setTxHash] = useState<Hash | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [isUploadingMetadata, setIsUploadingMetadata] = useState(false);
 
   const { writeContractAsync, isPending: isWriting, error: writeError } = useWriteContract();
 
@@ -56,6 +57,7 @@ export default function CreatePage() {
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       setFormError(null);
+      setTxHash(null);
 
       const form = new FormData(event.currentTarget);
       const title = (form.get('title') as string)?.trim();
@@ -63,7 +65,11 @@ export default function CreatePage() {
       const description = (form.get('description') as string)?.trim();
       const goalInput = (form.get('goal') as string)?.trim();
       const deadlineInput = (form.get('deadline') as string)?.trim();
-      const metadataURI = (form.get('metadata') as string)?.trim();
+      const categoryInput = (form.get('category') as string)?.trim();
+      const cover = (form.get('cover') as string)?.trim();
+      const milestoneInput = (form.get('milestone') as string)?.trim();
+      const resolvedCategory =
+        categoryInput && categoryInput.length > 0 ? categoryInput : categories[0];
 
       if (!title || !tagline || !description) {
         setFormError('Please fill in the project title, tagline, and description.');
@@ -82,13 +88,64 @@ export default function CreatePage() {
         setFormError('The deadline must be later than the current time.');
         return;
       }
-      if (!metadataURI) {
-        setFormError('Please provide a project metadata URI (e.g., IPFS link).');
+
+      let goal: bigint;
+      try {
+        goal = parseEther(goalInput);
+      } catch {
+        setFormError('Please enter a valid goal amount (ETH).');
         return;
       }
 
+      const milestones =
+        milestoneInput
+          ?.split('\n')
+          .map((item) => item.trim())
+          .filter((item): item is string => item.length > 0) ?? [];
+
       try {
-        const goal = parseEther(goalInput);
+
+        const metadataPayload = {
+          version: '1.0.0',
+          title,
+          summary: tagline,
+          tagline,
+          description,
+          category: resolvedCategory,
+          ...(cover ? { image: cover, cover } : {}),
+          ...(milestones.length > 0 ? { milestones } : {}),
+          funding: {
+            goalAmountEth: goalInput,
+            goalAmountWei: goal.toString(),
+            currency: 'ETH',
+          },
+          timeline: {
+            deadline,
+            deadlineISO: new Date(deadline * 1000).toISOString(),
+          },
+          createdAt: new Date().toISOString(),
+        };
+
+        const metadataFile = new File([JSON.stringify(metadataPayload, null, 2)], 'metadata.json', {
+          type: 'application/json',
+        });
+        const uploadBody = new FormData();
+        uploadBody.append('file', metadataFile);
+
+        setIsUploadingMetadata(true);
+        const response = await fetch('/api/metadata', {
+          method: 'POST',
+          body: uploadBody,
+        });
+        if (!response.ok) {
+          throw new Error('Failed to upload project metadata. Please try again.');
+        }
+        const payload = (await response.json()) as { uri?: string; gatewayUrl?: string };
+        const metadataURI = payload?.uri ?? payload?.gatewayUrl;
+        if (!metadataURI) {
+          throw new Error('Metadata upload did not return a valid URI.');
+        }
+
         const hash = await writeContractAsync({
           address: factoryAddress,
           abi: campaignFactoryAbi,
@@ -102,10 +159,21 @@ export default function CreatePage() {
         } else {
           setFormError('Transaction submission failed, please try again later.');
         }
+      } finally {
+        setIsUploadingMetadata(false);
       }
     },
     [factoryAddress, writeContractAsync]
   );
+
+  const submitDisabled = !isConnected || isUploadingMetadata || isWriting || isConfirming;
+  const submitLabel = isUploadingMetadata
+    ? 'Uploading metadata...'
+    : isWriting || isConfirming
+      ? 'Submitting...'
+      : isSuccess
+        ? 'Created'
+        : 'Submit Creation';
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-12">
@@ -238,20 +306,8 @@ export default function CreatePage() {
                 />
               </div>
             </div>
-            <div className="grid gap-2">
-              <label className="text-sm font-medium text-slate-700" htmlFor="metadata">
-                Metadata URI
-              </label>
-              <Input
-                id="metadata"
-                name="metadata"
-                placeholder="ipfs://your-metadata.json"
-                className="h-11 rounded-xl px-4"
-              />
-            </div>
             <p className="text-xs text-slate-400">
-              Tip: Before official release, ensure metadata is publicly accessible and complies with
-              platform standards.
+              Metadata will be generated and uploaded to IPFS automatically when you submit.
             </p>
           </CardContent>
         </Card>
@@ -280,19 +336,18 @@ export default function CreatePage() {
           <div className="flex flex-wrap gap-3">
             <Button
               type="submit"
-              disabled={!isConnected || isWriting || isConfirming}
+              disabled={submitDisabled}
               className="rounded-full px-6"
             >
-              {isWriting || isConfirming
-                ? 'Submitting...'
-                : isSuccess
-                  ? 'Created'
-                  : 'Submit Creation'}
+              {submitLabel}
             </Button>
             <Button asChild variant="outline" className="rounded-full px-6">
               <Link href="/">Back to Home</Link>
             </Button>
           </div>
+          {isUploadingMetadata && (
+            <p className="text-xs text-slate-400">Uploading metadata to IPFS...</p>
+          )}
           {!isConnected && (
             <p className="text-xs text-slate-400">
               Please connect your wallet first to submit the transaction.
