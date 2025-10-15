@@ -56,7 +56,7 @@ export default function DemoPage() {
     eventName: 'NumberSet',
     onLogs: (logs) => {
       console.log('✅ Event "NumberSet" detected!', logs);
-      console.log('✅成功了!', logs);
+
       refetchNumber();
     },
     onError: (error) => {
