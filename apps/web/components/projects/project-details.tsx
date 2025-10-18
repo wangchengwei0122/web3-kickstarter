@@ -128,6 +128,7 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
           abi: campaignAbi,
           functionName: 'pledge',
           value: weiAmount,
+          args: [], //
         });
         setTxHash(hash);
       } catch (error) {
