@@ -43,10 +43,10 @@ const statusClassName: Record<ProjectDetail['status'], string> = {
 };
 
 const statusLabel: Record<ProjectDetail['status'], string> = {
-  active: '进行中',
-  successful: '已成功',
-  failed: '未达成',
-  cancelled: '已取消',
+  active: 'In Progress',
+  successful: 'Successful',
+  failed: 'Not Achieved',
+  cancelled: 'Cancelled',
 };
 
 export type ProjectDetailsProps = {
@@ -100,12 +100,12 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
       const trimmed = amountInput.trim();
 
       if (!trimmed) {
-        setFormError('请选择或输入支持金额。');
+        setFormError('Please select or enter the support amount.');
         return;
       }
 
       if (!isConnected) {
-        setFormError('请先连接钱包后再支持项目。');
+        setFormError('Please connect your wallet before supporting the project.');
         return;
       }
 
@@ -113,12 +113,12 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
       try {
         weiAmount = parseEther(trimmed);
       } catch {
-        setFormError('请输入有效的金额（支持最多 18 位小数）。');
+        setFormError('Please enter a valid amount (support up to 18 decimal places).');
         return;
       }
 
       if (weiAmount <= 0n) {
-        setFormError('支持金额必须大于 0。');
+        setFormError('Support amount must be greater than 0.');
         return;
       }
 
@@ -135,7 +135,7 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
         if (error instanceof Error) {
           setFormError(error.message);
         } else {
-          setFormError('交易提交失败，请稍后再试。');
+          setFormError('Transaction submission failed, please try again later.');
         }
       }
     },
@@ -144,7 +144,7 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
 
   useEffect(() => {
     if (isSuccess && txHash) {
-      setFeedback('支持成功，交易已确认。');
+      setFeedback('Support successful, transaction confirmed.');
       setAmountInput('');
       setActivePreset(null);
       setLastTxHash(txHash);
@@ -162,7 +162,7 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
         <div className="space-y-6">
           <div className="rounded-[28px] bg-white p-8 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5">
             <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-              <span>项目编号：{project.id}</span>
+              <span>Campaign ID：{project.id}</span>
               <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
                 {project.category}
               </span>
@@ -184,19 +184,19 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
             <div className="mt-8 grid gap-6 rounded-[24px] bg-slate-50 p-6">
               <div className="grid gap-6 text-sm text-slate-500 md:grid-cols-2">
                 <div>
-                  <p className="text-slate-400">已筹金额</p>
+                  <p className="text-slate-400">Pledged Amount</p>
                   <p className="mt-1 text-2xl font-semibold text-slate-900">
                     {formatCurrency(project.pledgedAmount)}
                   </p>
-                  <p className="text-xs">已完成 {Math.round(progress * 100)}%</p>
+                  <p className="text-xs">Completed {Math.round(progress * 100)}%</p>
                 </div>
                 <div>
-                  <p className="text-slate-400">目标金额</p>
+                  <p className="text-slate-400">Goal Amount</p>
                   <p className="mt-1 text-2xl font-semibold text-slate-900">
                     {formatCurrency(project.goalAmount)}
                   </p>
                   <p className="text-xs">
-                    {daysLeft} 天剩余 · {project.backerCount} 位支持者
+                    {daysLeft} days left · {project.backerCount} backers
                   </p>
                 </div>
               </div>
@@ -212,9 +212,9 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
 
           <div className="rounded-[28px] bg-white p-8 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5">
             <nav className="flex flex-wrap gap-6 text-sm font-medium text-slate-500">
-              <span className="text-slate-900">项目介绍</span>
-              <span className="text-slate-300">进度更新</span>
-              <span className="text-slate-300">支持者</span>
+              <span className="text-slate-900">Project Introduction</span>
+              <span className="text-slate-300">Progress Updates</span>
+              <span className="text-slate-300">Backers</span>
             </nav>
             <div className="mt-6 whitespace-pre-line text-base leading-relaxed text-slate-600">
               {project.description}
@@ -227,8 +227,10 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
             className="rounded-[28px] bg-white p-6 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5"
             onSubmit={handleSupport}
           >
-            <h2 className="text-lg font-semibold text-slate-900">支持项目</h2>
-            <p className="mt-2 text-sm text-slate-500">你的每一笔支持都将直接用于项目建设。</p>
+            <h2 className="text-lg font-semibold text-slate-900">Support the Project</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              Your every support will be directly used for the project.
+            </p>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
               {presetSupportAmounts.map((amount) => {
@@ -253,7 +255,7 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
 
             <div className="mt-6 space-y-3">
               <label className="text-xs font-medium text-slate-500" htmlFor="support-amount">
-                自定义支持金额 (USD)
+                Custom Support Amount (USD)
               </label>
               <Input
                 id="support-amount"
@@ -283,7 +285,9 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
             ) : null}
 
             {!isProjectOpen ? (
-              <p className="mt-3 text-xs text-slate-400">该项目已结束或不可支持。</p>
+              <p className="mt-3 text-xs text-slate-400">
+                This project has ended or is not supported.
+              </p>
             ) : null}
 
             <Button
@@ -291,30 +295,36 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
               type="submit"
               disabled={!isProjectOpen || isProcessing}
             >
-              {isProcessing ? '交易确认中...' : '现在支持'}
+              {isProcessing ? 'Transaction Confirming...' : 'Support Now'}
             </Button>
 
             <p className="mt-3 text-center text-xs text-slate-400">
-              你的支持将用于项目执行，不可退回。
+              Your support will be used for project execution, and cannot be refunded.
             </p>
           </form>
 
           <Card className="rounded-[28px] border-0 bg-white p-6 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5">
             <CardHeader className="px-0">
-              <CardTitle className="text-lg font-semibold text-slate-900">发起人信息</CardTitle>
+              <CardTitle className="text-lg font-semibold text-slate-900">
+                Project Creator Information
+              </CardTitle>
             </CardHeader>
             <CardContent className="px-0 text-sm text-slate-500">
               <dl className="space-y-4">
                 <div className="space-y-1">
-                  <dt className="text-xs uppercase tracking-wide text-slate-400">项目方</dt>
+                  <dt className="text-xs uppercase tracking-wide text-slate-400">Project Owner</dt>
                   <dd className="font-medium text-slate-900">{project.creator}</dd>
                 </div>
                 <div className="space-y-1">
-                  <dt className="text-xs uppercase tracking-wide text-slate-400">发起人地址</dt>
+                  <dt className="text-xs uppercase tracking-wide text-slate-400">
+                    Project Creator Address
+                  </dt>
                   <dd className="font-medium text-slate-900">{project.owner}</dd>
                 </div>
                 <div className="space-y-1">
-                  <dt className="text-xs uppercase tracking-wide text-slate-400">项目类别</dt>
+                  <dt className="text-xs uppercase tracking-wide text-slate-400">
+                    Project Category
+                  </dt>
                   <dd className="font-medium text-slate-900">{project.category}</dd>
                 </div>
               </dl>
