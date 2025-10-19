@@ -14,12 +14,12 @@ import { campaignAbi } from '@packages/contracts/abi';
 
 import type { ProjectDetail } from './types';
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value);
+function formatEth(value: number) {
+  const formatted = value.toLocaleString('zh-CN', {
+    minimumFractionDigits: value >= 1 ? 0 : 2,
+    maximumFractionDigits: 4,
+  });
+  return `${formatted} ETH`;
 }
 
 function getProgressValue(goal: number, pledged: number) {
@@ -53,7 +53,7 @@ export type ProjectDetailsProps = {
   project: ProjectDetail;
 };
 
-const presetSupportAmounts = [50, 100, 250, 500];
+const presetSupportAmounts = [0.05, 0.1, 0.5, 1];
 
 export function ProjectDetails({ project }: ProjectDetailsProps) {
   const progress = getProgressValue(project.goalAmount, project.pledgedAmount);
@@ -67,12 +67,17 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
   const [lastTxHash, setLastTxHash] = useState<Hash | null>(null);
 
   const { writeContractAsync, isPending: isWriting } = useWriteContract();
+
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash: txHash ?? undefined,
   });
 
+  const hasReachedGoal = project.goalAmount > 0 && project.pledgedAmount >= project.goalAmount;
+  const derivedStatus: ProjectDetail['status'] =
+    project.status === 'active' && hasReachedGoal ? 'successful' : project.status;
+
   const isProcessing = isWriting || isConfirming;
-  const isProjectOpen = project.status === 'active' && daysLeft > 0;
+  const isProjectOpen = project.status === 'active' && daysLeft > 0 && !hasReachedGoal;
 
   const campaignAddress = useMemo(() => project.id as Address, [project.id]);
 
@@ -173,9 +178,9 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
                 {project.title}
               </h1>
               <Badge
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClassName[project.status]}`}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClassName[derivedStatus]}`}
               >
-                {statusLabel[project.status]}
+                {statusLabel[derivedStatus]}
               </Badge>
             </div>
 
@@ -186,14 +191,14 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
                 <div>
                   <p className="text-slate-400">Pledged Amount</p>
                   <p className="mt-1 text-2xl font-semibold text-slate-900">
-                    {formatCurrency(project.pledgedAmount)}
+                    {formatEth(project.pledgedAmount)}
                   </p>
                   <p className="text-xs">Completed {Math.round(progress * 100)}%</p>
                 </div>
                 <div>
                   <p className="text-slate-400">Goal Amount</p>
                   <p className="mt-1 text-2xl font-semibold text-slate-900">
-                    {formatCurrency(project.goalAmount)}
+                    {formatEth(project.goalAmount)}
                   </p>
                   <p className="text-xs">
                     {daysLeft} days left · {project.backerCount} backers
@@ -247,7 +252,7 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
                     )}
                     disabled={!isProjectOpen || isProcessing}
                   >
-                    ${amount}
+                    {amount}
                   </button>
                 );
               })}
@@ -255,14 +260,14 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
 
             <div className="mt-6 space-y-3">
               <label className="text-xs font-medium text-slate-500" htmlFor="support-amount">
-                Custom Support Amount (USD)
+                Custom Support Amount (ETH)
               </label>
               <Input
                 id="support-amount"
                 type="number"
                 min="0"
                 step="any"
-                placeholder="50"
+                placeholder="0.1"
                 className="h-11 rounded-full border-slate-200"
                 value={amountInput}
                 onChange={handleAmountChange}
