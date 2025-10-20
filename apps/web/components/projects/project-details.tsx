@@ -324,13 +324,17 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
                   <dt className="text-xs uppercase tracking-wide text-slate-400">
                     Project Creator Address
                   </dt>
-                  <dd className="font-medium text-slate-900">{project.owner}</dd>
+                  <dd className="whitespace-pre break-all font-medium text-slate-900">
+                    {project.owner}
+                  </dd>
                 </div>
                 <div className="space-y-1">
                   <dt className="text-xs uppercase tracking-wide text-slate-400">
                     Project Category
                   </dt>
-                  <dd className="font-medium text-slate-900">{project.category}</dd>
+                  <dd className="whitespace-pre break-all font-medium text-slate-900">
+                    {project.category}
+                  </dd>
                 </div>
               </dl>
             </CardContent>
