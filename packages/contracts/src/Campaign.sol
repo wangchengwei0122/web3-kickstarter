@@ -5,19 +5,20 @@ import {ReentrancyGuard} from "lib/openzeppelin-contracts/contracts/utils/Reentr
 import {ICampaignFactory} from "./ICampaignFactory.sol";
 
 contract Campaign is ReentrancyGuard {
-  event Pledged(address indexed backer, uint256 amount);
-  event Finalized(bool success);
-  event Refunded(address indexed backer, uint256 amount);
-  event Cancelled();
-  event Unpledged(address indexed backer, uint256 amount);
-
   enum Status {
     Active,
     Successful,
     Failed,
     Cancelled
   }
-  address creator; // 创建者
+  event Pledged(address indexed backer, uint256 amount);
+  event Finalized(bool success);
+  event Refunded(address indexed backer, uint256 amount);
+  event Cancelled();
+  event Unpledged(address indexed backer, uint256 amount);
+  event StatusChanged(Status newStatus);
+
+  address public immutable creator; // 创建者
   address public immutable factory; // 工厂
   string public metadataURI;
   uint256 public goal; // 目标金额
@@ -25,8 +26,6 @@ contract Campaign is ReentrancyGuard {
   Status public status; // 状态
   uint256 public totalPledged; // 已筹金额
   mapping(address => uint256) public pledges; // 出资
-  // mapping(address => uint256) rewards; // 奖励
-  // mapping(address => uint256) milestones; // 里程碑
 
   modifier onlyCreator() {
     require(msg.sender == creator, "Only creator can call this function");
@@ -45,6 +44,10 @@ contract Campaign is ReentrancyGuard {
 
   modifier afterDeadline() {
     require(block.timestamp >= deadline, "Campaign is not over");
+    _;
+  }
+  modifier notPaused() {
+    require(!ICampaignFactory(factory).paused(), "FACTORY_PAUSED");
     _;
   }
 
@@ -71,19 +74,22 @@ contract Campaign is ReentrancyGuard {
   }
 
   // 出资
-  function pledge() external payable onlyActive beforeDeadline nonReentrant {
+  function pledge() external payable onlyActive beforeDeadline notPaused nonReentrant {
     require(msg.value > 0, "Amount is required");
     pledges[msg.sender] += msg.value;
     totalPledged += msg.value;
     emit Pledged(msg.sender, msg.value);
   }
 
-  function finalize() external afterDeadline nonReentrant {
-    bool success = totalPledged >= goal;
-    if (success) {
-      status = Status.Successful;
-      emit Finalized(true);
+  function finalize() public afterDeadline nonReentrant {
+    require(status == Status.Active, "ALREADY_FINALIZED");
 
+    bool success = totalPledged >= goal;
+    status = success ? Status.Successful : Status.Failed;
+    emit Finalized(success);
+    emit StatusChanged(status);
+
+    if (success) {
       ICampaignFactory fac = ICampaignFactory(factory);
       uint16 bps = fac.feeBps();
       address tre = fac.treasury();
@@ -99,38 +105,47 @@ contract Campaign is ReentrancyGuard {
 
       (bool okC, ) = payable(creator).call{value: bal}("");
       require(okC, "CREATOR_XFER_FAIL");
-    } else {
-      status = Status.Failed;
-      emit Finalized(false);
     }
   }
 
   function refund() external nonReentrant {
+    if (status == Status.Active && block.timestamp >= deadline) {
+      finalize(); // auto finalize if campaign is active and deadline is reached
+    }
+
     require(status == Status.Failed, "CAMPAIGN_NOT_FAILED");
     uint256 amount = pledges[msg.sender];
     require(amount > 0, "NO_PLEDGE");
+
     totalPledged = totalPledged - amount;
     pledges[msg.sender] = 0;
+
     (bool ok, ) = payable(msg.sender).call{value: amount}("");
     require(ok, "REFUND_FAIL");
+
     emit Refunded(msg.sender, amount);
   }
 
-  function cancel() external onlyCreator {
-    require(status == Status.Active, "CAMPAIGN_NOT_ACTIVE");
+  function cancel() external onlyCreator onlyActive {
     require(totalPledged == 0, "CAMPAIGN_HAS_PLEDGE");
+
     status = Status.Cancelled;
+
+    emit StatusChanged(status);
     emit Cancelled();
   }
 
-  function unpledge(uint256 _amount) external onlyActive beforeDeadline nonReentrant {
+  function unpledge(uint256 _amount) external onlyActive beforeDeadline notPaused nonReentrant {
     require(_amount > 0, "NO_PLEDGE");
     require(_amount <= pledges[msg.sender], "AMOUNT_TOO_LARGE");
+
     totalPledged -= _amount;
     pledges[msg.sender] = pledges[msg.sender] - _amount;
-    emit Unpledged(msg.sender, _amount);
+
     (bool ok, ) = payable(msg.sender).call{value: _amount}("");
     require(ok, "UNPLEDGE_FAIL");
+
+    emit Unpledged(msg.sender, _amount);
   }
 
   function getSummary()
@@ -141,10 +156,12 @@ contract Campaign is ReentrancyGuard {
       uint256 _goal,
       uint64 _deadline,
       Status _status,
-      uint256 _totalPledged
+      uint256 _totalPledged,
+      string memory _metadataURI,
+      address _factory
     )
   {
-    return (creator, goal, deadline, status, totalPledged);
+    return (creator, goal, deadline, status, totalPledged, metadataURI, factory);
   }
 
   receive() external payable {
