@@ -83,4 +83,76 @@ contract CampaignTest is Test {
     campaign.cancel();
     assertEq(uint(campaign.status()), uint(Campaign.Status.Cancelled));
   }
+
+  /// ❌ 未到截止时间 finalize 应失败
+  function testCannotFinalizeBeforeDeadline() public {
+    vm.expectRevert("Campaign is not over");
+    campaign.finalize();
+  }
+
+  /// ❌ 重复 finalize 应失败
+  function testCannotFinalizeTwice() public {
+    vm.prank(backer1);
+    campaign.pledge{value: 11 ether}(); // 达标
+    vm.warp(block.timestamp + 2 days);
+    campaign.finalize();
+
+    vm.expectRevert("ALREADY_FINALIZED");
+    campaign.finalize();
+  }
+
+  /// ❌ 未出资用户退款应失败
+  function testCannotRefundWithoutPledge() public {
+    vm.warp(block.timestamp + 2 days);
+    campaign.finalize();
+    vm.expectRevert("NO_PLEDGE");
+    campaign.refund();
+  }
+
+  /// ❌ 未达标但没 finalize 时，直接 refund 应自动 finalize -> 失败
+  function testRefundAutoFinalizeFailure() public {
+    vm.prank(backer1);
+    campaign.pledge{value: 1 ether}();
+
+    // 超时但没手动 finalize
+    vm.warp(block.timestamp + 2 days);
+
+    // refund 时会自动 finalize -> Failed
+    uint256 before = backer1.balance;
+    vm.startPrank(backer1);
+    campaign.refund();
+    vm.stopPrank();
+
+    assertGt(backer1.balance, before, "refund not returned");
+    assertEq(uint(campaign.status()), uint(Campaign.Status.Failed));
+  }
+
+  /// ❌ 过大 unpledge 应 revert
+  function testCannotUnpledgeMoreThanPledged() public {
+    vm.prank(backer1);
+    campaign.pledge{value: 1 ether}();
+
+    vm.startPrank(backer1);
+    vm.expectRevert("AMOUNT_TOO_LARGE");
+    campaign.unpledge(2 ether);
+    vm.stopPrank();
+  }
+
+  /// ❌ 有出资后 Creator 不可取消
+  function testCannotCancelAfterPledge() public {
+    vm.prank(backer1);
+    campaign.pledge{value: 1 ether}();
+
+    vm.prank(creator);
+    vm.expectRevert("CAMPAIGN_HAS_PLEDGE");
+    campaign.cancel();
+  }
+
+  /// ❌ Factory 被暂停后禁止创建
+  function testCannotCreateWhenPaused() public {
+    factory.setPaused(true);
+    vm.expectRevert("PAUSED");
+    vm.prank(creator);
+    factory.createCampaign(1 ether, uint64(block.timestamp + 1 days), "ipfs://meta");
+  }
 }
