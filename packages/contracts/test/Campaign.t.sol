@@ -51,6 +51,7 @@ contract CampaignTest is Test {
     campaign.pledge{value: 5 ether}();
     vm.stopPrank();
 
+    uint256 before = address(this).balance;
     vm.warp(block.timestamp + 2 days);
     vm.prank(backer1);
     campaign.finalize();
@@ -59,7 +60,9 @@ contract CampaignTest is Test {
 
     // 平台费断言（13 ETH * 5% = 0.65 ETH）
     uint256 fee = (13 ether * 500) / 10_000;
-    assertEq(address(this).balance, fee, "Treasury fee incorrect");
+
+    uint256 afterBal = address(this).balance;
+    assertEq((afterBal - before), fee, "Treasury fee incorrect");
   }
 
   function test_RefundAfterFail() public {
@@ -155,4 +158,6 @@ contract CampaignTest is Test {
     vm.prank(creator);
     factory.createCampaign(1 ether, uint64(block.timestamp + 1 days), "ipfs://meta");
   }
+
+  receive() external payable {}
 }

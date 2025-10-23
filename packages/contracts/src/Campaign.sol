@@ -81,7 +81,7 @@ contract Campaign is ReentrancyGuard {
     emit Pledged(msg.sender, msg.value);
   }
 
-  function finalize() public afterDeadline nonReentrant {
+  function _finalizeInternal() internal {
     require(status == Status.Active, "ALREADY_FINALIZED");
 
     bool success = totalPledged >= goal;
@@ -108,9 +108,13 @@ contract Campaign is ReentrancyGuard {
     }
   }
 
+  function finalize() public afterDeadline nonReentrant {
+    _finalizeInternal();
+  }
+
   function refund() external nonReentrant {
     if (status == Status.Active && block.timestamp >= deadline) {
-      finalize(); // auto finalize if campaign is active and deadline is reached
+      _finalizeInternal(); // auto finalize if campaign is active and deadline is reached
     }
 
     require(status == Status.Failed, "CAMPAIGN_NOT_FAILED");
