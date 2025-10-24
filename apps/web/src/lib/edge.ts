@@ -38,6 +38,14 @@ export type FetchCampaignOptions = {
   sort?: 'latest' | 'deadline';
 };
 
+export const env = {
+  EDGE: process.env.NEXT_PUBLIC_EDGE!,
+  RPC_URL: process.env.NEXT_PUBLIC_RPC_URL!,
+  CHAIN_ID: Number(process.env.NEXT_PUBLIC_CHAIN_ID!),
+  FACTORY: process.env.NEXT_PUBLIC_FACTORY!,
+  DEPLOY_BLOCK: process.env.NEXT_PUBLIC_DEPLOY_BLOCK!,
+};
+
 const DEFAULT_LIMIT = 12;
 
 const campaignCreatedEvent = getCampaignCreatedEvent();
@@ -50,11 +58,6 @@ function getCampaignCreatedEvent(): AbiEvent {
     throw new Error('CampaignCreated event missing from factory ABI');
   }
   return event;
-}
-
-function resolveEnv(key: string) {
-  const value = process.env[key];
-  return value && value.length > 0 ? value : undefined;
 }
 
 function parseNumeric(value: string | number | undefined) {
@@ -82,7 +85,8 @@ async function fetchFromEdge(
   limit: number,
   sort: 'latest' | 'deadline'
 ): Promise<CampaignPage> {
-  const base = resolveEnv('NEXT_PUBLIC_EDGE');
+  const base = env.EDGE;
+
   if (!base) {
     throw new Error('NEXT_PUBLIC_EDGE is not configured');
   }
@@ -110,12 +114,11 @@ async function fetchFromEdge(
 async function fetchDirectOnChain(limit: number, cursor: number): Promise<CampaignPage> {
   const rpcUrl = process.env.NEXT_PUBLIC_RPC_HTTP || 'http://127.0.0.1:8545';
 
-  const chainId = parseNumeric(resolveEnv('NEXT_PUBLIC_CHAIN_ID')) ?? manifest.chainId;
+  const chainId = parseNumeric(env.CHAIN_ID) ?? manifest.chainId;
 
-  const factory = ensureAddress(resolveEnv('NEXT_PUBLIC_FACTORY')) ?? manifest.factory;
+  const factory = ensureAddress(env.FACTORY) ?? manifest.factory;
 
-  const deployBlock =
-    parseBig(resolveEnv('NEXT_PUBLIC_DEPLOY_BLOCK')) ?? BigInt(manifest.deployBlock);
+  const deployBlock = parseBig(env.DEPLOY_BLOCK) ?? BigInt(manifest.deployBlock);
 
   if (!rpcUrl || !chainId || !factory || deployBlock === undefined) {
     throw new Error('Missing RPC fallback configuration');
