@@ -2,13 +2,6 @@ import { createPublicClient, http, type Address } from 'viem';
 import { campaignAbi } from '@packages/contracts/abi';
 
 import type { ProjectDetail } from '@/components/projects/types';
-import deployment from '../../../../packages/contracts/deployments/31337.json';
-
-type DeploymentManifest = {
-  chainId: number;
-};
-
-const manifest = deployment as DeploymentManifest;
 
 const statusMap: Record<number, ProjectDetail['status']> = {
   0: 'active',
@@ -38,6 +31,14 @@ const metadataCache = new Map<string, NormalisedMetadata>();
 
 const WEI_PER_ETH = 1_000_000_000_000_000_000n;
 
+function requireEnv(key: string) {
+  const value = process.env[key];
+  if (!value || value.trim().length === 0) {
+    throw new Error(`${key} is not configured`);
+  }
+  return value.trim();
+}
+
 function ensureAddress(value: string | undefined | null): Address | null {
   if (!value) {
     return null;
@@ -50,20 +51,16 @@ function ensureAddress(value: string | undefined | null): Address | null {
 }
 
 function resolveRpcUrl() {
-  const direct =
-    process.env.NEXT_PUBLIC_RPC_URL?.trim() || process.env.NEXT_PUBLIC_RPC_HTTP?.trim();
-  return direct && direct.length > 0 ? direct : 'http://127.0.0.1:8545';
+  return requireEnv('NEXT_PUBLIC_RPC_URL');
 }
 
 function resolveChainId() {
-  const raw = process.env.NEXT_PUBLIC_CHAIN_ID;
-  if (raw) {
-    const parsed = Number.parseInt(raw, 10);
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
+  const raw = requireEnv('NEXT_PUBLIC_CHAIN_ID');
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed)) {
+    throw new Error('NEXT_PUBLIC_CHAIN_ID must be a valid number');
   }
-  return manifest.chainId;
+  return parsed;
 }
 
 function resolveMetadataUrl(uri: string) {

@@ -1,10 +1,6 @@
 import { createPublicClient, http, type AbiEvent, type Address } from 'viem';
 import { campaignAbi, campaignFactoryAbi } from '@packages/contracts/abi';
 
-const LATEST_INDEX_KEY = 'kv:crowd:index';
-const DEADLINE_INDEX_KEY = 'kv:crowd:index:deadline';
-const CHECKPOINT_KEY = 'kv:crowd:checkpoint';
-const CAMPAIGN_KEY_PREFIX = 'kv:crowd:campaign:';
 const DEFAULT_LIMIT = 12;
 const MAX_INDEX_SIZE = 1024;
 const MAX_RETRIES = 4;
@@ -74,6 +70,59 @@ function jsonResponse(body: unknown, init: ResponseInit = {}) {
 const isValidAddress = (value: string): value is Address => /^0x[a-fA-F0-9]{40}$/.test(value);
 const normaliseAddress = (value: string) => value.toLowerCase();
 
+function keyPrefixForFactory(env: Env) {
+	const factory = resolveFactory(env.FACTORY);
+	return `kv:crowd:${normaliseAddress(factory)}`;
+}
+
+function latestIndexKey(env: Env) {
+	return `${keyPrefixForFactory(env)}:index`;
+}
+
+function deadlineIndexKey(env: Env) {
+	return `${keyPrefixForFactory(env)}:index:deadline`;
+}
+
+function checkpointKey(env: Env) {
+	return `${keyPrefixForFactory(env)}:checkpoint`;
+}
+
+function campaignKey(env: Env, address: string) {
+	return `${keyPrefixForFactory(env)}:campaign:${normaliseAddress(address)}`;
+}
+
+function resolveChainId(value?: string) {
+	if (!value) {
+		throw new Error('CHAIN_ID env is not configured');
+	}
+	const parsed = Number.parseInt(value, 10);
+	if (Number.isNaN(parsed)) {
+		throw new Error(`Invalid CHAIN_ID env: ${value}`);
+	}
+	return parsed;
+}
+
+function resolveFactory(value?: string) {
+	if (!value || !isValidAddress(value)) {
+		throw new Error('FACTORY env must be a valid address');
+	}
+	return value as Address;
+}
+
+function resolveDeployBlock(value?: string) {
+	if (!value || value.length === 0) {
+		throw new Error('DEPLOY_BLOCK env is not configured');
+	}
+	return parseRequiredBigInt(value, 'DEPLOY_BLOCK');
+}
+
+function resolveRpcUrl(value?: string) {
+	if (!value || value.trim().length === 0) {
+		throw new Error('RPC_URL env is not configured');
+	}
+	return value.trim();
+}
+
 function getCampaignCreatedEvent(): AbiEvent {
 	const event = campaignFactoryAbi.find((item): item is AbiEvent => item.type === 'event' && item.name === 'CampaignCreated');
 	if (!event) {
@@ -104,24 +153,21 @@ function parseRequiredBigInt(value: string, label: string): bigint {
 }
 
 function createClient(env: Env) {
-	const chainId = Number.parseInt(env.CHAIN_ID, 10);
-	if (Number.isNaN(chainId)) {
-		throw new Error('Invalid CHAIN_ID env');
-	}
-
+	const chainId = resolveChainId(env.CHAIN_ID);
+	const rpcUrl = resolveRpcUrl(env.RPC_URL);
 	return createPublicClient({
 		chain: {
 			id: chainId,
 			name: `chain-${chainId}`,
 			nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-			rpcUrls: { default: { http: [env.RPC_URL] }, public: { http: [env.RPC_URL] } },
+			rpcUrls: { default: { http: [rpcUrl] }, public: { http: [rpcUrl] } },
 		},
-		transport: http(env.RPC_URL),
+		transport: http(rpcUrl),
 	});
 }
 
 async function getLatestIndex(env: Env): Promise<string[]> {
-	const raw = await env.KV.get(LATEST_INDEX_KEY);
+	const raw = await env.KV.get(latestIndexKey(env));
 	if (!raw) return [];
 	try {
 		const parsed = JSON.parse(raw);
@@ -135,11 +181,11 @@ async function getLatestIndex(env: Env): Promise<string[]> {
 
 async function putLatestIndex(env: Env, addresses: string[]) {
 	const trimmed = addresses.slice(0, MAX_INDEX_SIZE);
-	await env.KV.put(LATEST_INDEX_KEY, JSON.stringify(trimmed));
+	await env.KV.put(latestIndexKey(env), JSON.stringify(trimmed));
 }
 
 async function getDeadlineIndex(env: Env): Promise<DeadlineEntry[]> {
-	const raw = await env.KV.get(DEADLINE_INDEX_KEY);
+	const raw = await env.KV.get(deadlineIndexKey(env));
 	if (!raw) return [];
 	try {
 		const parsed = JSON.parse(raw);
@@ -167,11 +213,11 @@ async function getDeadlineIndex(env: Env): Promise<DeadlineEntry[]> {
 
 async function putDeadlineIndex(env: Env, entries: DeadlineEntry[]) {
 	const trimmed = entries.slice(0, MAX_INDEX_SIZE);
-	await env.KV.put(DEADLINE_INDEX_KEY, JSON.stringify(trimmed));
+	await env.KV.put(deadlineIndexKey(env), JSON.stringify(trimmed));
 }
 
 async function loadCampaign(env: Env, address: string) {
-	const record = await env.KV.get(CAMPAIGN_KEY_PREFIX + normaliseAddress(address), 'json');
+	const record = await env.KV.get(campaignKey(env, address), 'json');
 	if (!record) return null;
 	return record as CampaignRecord;
 }
@@ -233,32 +279,28 @@ async function updateDeadlineIndex(env: Env, address: Address, deadline: number)
 async function persistCampaign(env: Env, record: CampaignRecord) {
 	const keyAddress = normaliseAddress(record.address);
 	const storedRecord: CampaignRecord = { ...record, address: keyAddress as Address };
-	await env.KV.put(CAMPAIGN_KEY_PREFIX + keyAddress, JSON.stringify(storedRecord));
+	await env.KV.put(campaignKey(env, keyAddress), JSON.stringify(storedRecord));
 	await updateLatestIndex(env, storedRecord.address);
 	await updateDeadlineIndex(env, storedRecord.address, storedRecord.deadline);
 }
 
 async function runIndexer(env: Env) {
-	const factoryAddress = env.FACTORY;
-	if (!isValidAddress(factoryAddress)) {
-		throw new Error('FACTORY env must be a valid address');
-	}
-
-	const deployBlock = parseRequiredBigInt(env.DEPLOY_BLOCK, 'DEPLOY_BLOCK');
+	const factoryAddress = resolveFactory(env.FACTORY);
+	const deployBlock = resolveDeployBlock(env.DEPLOY_BLOCK);
 	const client = createClient(env);
 
-	const lastProcessedRaw = await env.KV.get(CHECKPOINT_KEY);
+	const lastProcessedRaw = await env.KV.get(checkpointKey(env));
 	const fromBlock = lastProcessedRaw ? parseRequiredBigInt(lastProcessedRaw, 'checkpoint') + 1n : deployBlock;
 	const headBlock = await withRetry(() => client.getBlockNumber());
 
 	if (fromBlock > headBlock) {
-		await env.KV.put(CHECKPOINT_KEY, headBlock.toString());
+		await env.KV.put(checkpointKey(env), headBlock.toString());
 		return;
 	}
 
 	const logs = await withRetry(() =>
 		client.getLogs({
-			address: factoryAddress as Address,
+			address: factoryAddress,
 			event: campaignCreatedEvent,
 			fromBlock,
 			toBlock: headBlock,
@@ -310,13 +352,13 @@ async function runIndexer(env: Env) {
 	}
 
 	const newCheckpoint = logs.length > 0 ? logs[logs.length - 1]!.blockNumber : headBlock;
-	await env.KV.put(CHECKPOINT_KEY, newCheckpoint.toString());
+	await env.KV.put(checkpointKey(env), newCheckpoint.toString());
 }
 
 async function handleHealthRequest(env: Env) {
 	const client = createClient(env);
 	const [checkpointRaw, latestIndex, headNumber] = await Promise.all([
-		env.KV.get(CHECKPOINT_KEY),
+		env.KV.get(checkpointKey(env)),
 		getLatestIndex(env),
 		withRetry(() => client.getBlockNumber()),
 	]);
@@ -338,7 +380,7 @@ async function handleHealthRequest(env: Env) {
 }
 
 export default {
-	async fetch(request: Request, env: Env): Promise<Response> {
+	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
 
 		// ✅ 1. 处理预检请求
@@ -350,8 +392,10 @@ export default {
 		try {
 			if (request.method === 'GET' && url.pathname === '/campaigns') {
 				response = await handleCampaignsRequest(request, env);
+				ctx.waitUntil(runIndexer(env));
 			} else if (request.method === 'GET' && url.pathname === '/health') {
 				response = await handleHealthRequest(env);
+				ctx.waitUntil(runIndexer(env));
 			} else {
 				response = jsonResponse({ error: 'Not Found' }, { status: 404 });
 			}
@@ -362,5 +406,8 @@ export default {
 
 		// ✅ 2. 统一添加 CORS header
 		return withCors({ status: response.status, statusText: response.statusText, headers: response.headers }, response.body ?? null);
+	},
+	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+		ctx.waitUntil(runIndexer(env));
 	},
 } satisfies ExportedHandler<Env>;

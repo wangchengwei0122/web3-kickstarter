@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { campaignFactoryAbi } from '@packages/contracts/abi';
-import deployment from '../../../../packages/contracts/deployments/31337.json';
 
 const categories = ['Technology', 'Art', 'Education', 'Environment', 'Social Impact', 'Lifestyle'];
 
@@ -21,20 +20,12 @@ const formHint =
 const controlClass =
   'w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100';
 
-type DeploymentManifest = {
-  chainId: number;
-  factory: `0x${string}`;
-  deployBlock: number;
-};
-
-const manifest = deployment as DeploymentManifest;
-
 function resolveFactory(): Address {
   const envAddress = process.env.NEXT_PUBLIC_FACTORY;
-  if (envAddress && /^0x[a-fA-F0-9]{40}$/.test(envAddress)) {
-    return envAddress as Address;
+  if (!envAddress || !/^0x[a-fA-F0-9]{40}$/.test(envAddress)) {
+    throw new Error('NEXT_PUBLIC_FACTORY is not configured or invalid.');
   }
-  return manifest.factory as Address;
+  return envAddress as Address;
 }
 
 export default function CreatePage() {
@@ -104,7 +95,6 @@ export default function CreatePage() {
           .filter((item): item is string => item.length > 0) ?? [];
 
       try {
-
         const metadataPayload = {
           version: '1.0.0',
           title,
@@ -145,13 +135,14 @@ export default function CreatePage() {
         if (!metadataURI) {
           throw new Error('Metadata upload did not return a valid URI.');
         }
-
+        console.log('metadataURI', metadataURI);
         const hash = await writeContractAsync({
           address: factoryAddress,
           abi: campaignFactoryAbi,
           functionName: 'createCampaign',
           args: [goal, BigInt(deadline), metadataURI],
         });
+        console.log('hash', hash);
         setTxHash(hash);
       } catch (error) {
         if (error instanceof Error) {
@@ -334,11 +325,7 @@ export default function CreatePage() {
             </div>
           )}
           <div className="flex flex-wrap gap-3">
-            <Button
-              type="submit"
-              disabled={submitDisabled}
-              className="rounded-full px-6"
-            >
+            <Button type="submit" disabled={submitDisabled} className="rounded-full px-6">
               {submitLabel}
             </Button>
             <Button asChild variant="outline" className="rounded-full px-6">

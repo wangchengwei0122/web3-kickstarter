@@ -7,9 +7,7 @@
 	"workers_dev": true,
 	// 定时任务（cron）
 	"triggers": {
-		"crons": [
-			"*/1 * * * *"
-		]
+		"crons": ["*/1 * * * *"],
 	},
 	// 绑定的 KV 命名空间
 	"kv_namespaces": [
@@ -17,14 +15,14 @@
 			"binding": "KV",
 			// 运行 `wrangler kv:namespace create KV` 后将 id 写到这里；
 			// 本地预览可使用 preview_id（`wrangler kv:namespace create --preview KV`）
-			"id": "fd693cb1fdfe410aacb6843ba16f05d1"
-		}
+			"id": "fd693cb1fdfe410aacb6843ba16f05d1",
+		},
 	],
 	// 环境变量
 	"vars": {
-		"RPC_URL": "http://127.0.0.1:8545",
-		"CHAIN_ID": "31337",
-		"FACTORY": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
-		"DEPLOY_BLOCK": "0"
-	}
+		// "RPC_URL": "https://eth.merkle.io",
+		// "CHAIN_ID": "31337",
+		// "FACTORY": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+		// "DEPLOY_BLOCK": "0"
+	},
 }

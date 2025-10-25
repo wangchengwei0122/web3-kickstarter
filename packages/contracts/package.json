@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     "./abi": "./abi/index.ts",
-    "./abi/*": "./abi/*"
+    "./abi/*": "./abi/*",
+    "./deployments/*": "./deployments/*"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

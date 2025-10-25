@@ -1,14 +1,5 @@
 import { createPublicClient, http, type AbiEvent, type Address, type PublicClient } from 'viem';
 import { campaignAbi, campaignFactoryAbi } from '@packages/contracts/abi';
-import deployment from '../../../../packages/contracts/deployments/31337.json';
-
-type DeploymentManifest = {
-  chainId: number;
-  factory: Address;
-  deployBlock: number;
-};
-
-const manifest = deployment as DeploymentManifest;
 
 export type EdgeCampaign = {
   address: Address;
@@ -38,12 +29,12 @@ export type FetchCampaignOptions = {
   sort?: 'latest' | 'deadline';
 };
 
-export const env = {
-  EDGE: process.env.NEXT_PUBLIC_EDGE!,
-  RPC_URL: process.env.NEXT_PUBLIC_RPC_URL!,
-  CHAIN_ID: Number(process.env.NEXT_PUBLIC_CHAIN_ID!),
-  FACTORY: process.env.NEXT_PUBLIC_FACTORY!,
-  DEPLOY_BLOCK: process.env.NEXT_PUBLIC_DEPLOY_BLOCK!,
+const runtimeConfig = {
+  edgeUrl: requireEnv('NEXT_PUBLIC_EDGE'),
+  rpcUrl: requireEnv('NEXT_PUBLIC_RPC_URL').trim(),
+  chainId: requireNumeric('NEXT_PUBLIC_CHAIN_ID'),
+  factory: requireAddress('NEXT_PUBLIC_FACTORY'),
+  deployBlock: requireBigInt('NEXT_PUBLIC_DEPLOY_BLOCK'),
 };
 
 const DEFAULT_LIMIT = 12;
@@ -60,32 +51,45 @@ function getCampaignCreatedEvent(): AbiEvent {
   return event;
 }
 
-function parseNumeric(value: string | number | undefined) {
-  if (value === undefined) return undefined;
-  if (typeof value === 'number') return value;
-  const n = Number.parseInt(value, 10);
-  return Number.isNaN(n) ? undefined : n;
+function requireEnv(key: string) {
+  const value = process.env[key];
+  if (!value || value.trim().length === 0) {
+    throw new Error(`${key} is not configured`);
+  }
+  return value;
 }
 
-function parseBig(value: string | undefined) {
-  if (!value) return undefined;
+function requireNumeric(key: string) {
+  const value = requireEnv(key);
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) {
+    throw new Error(`${key} must be a valid number`);
+  }
+  return parsed;
+}
+
+function requireBigInt(key: string) {
+  const value = requireEnv(key);
   try {
     return BigInt(value);
   } catch (error) {
-    return undefined;
+    throw new Error(`${key} must be a valid integer`);
   }
 }
 
-function ensureAddress(value: string | undefined): Address | undefined {
-  if (!value) return undefined;
-  return /^0x[a-fA-F0-9]{40}$/.test(value) ? (value as Address) : undefined;
+function requireAddress(key: string) {
+  const value = requireEnv(key);
+  if (!/^0x[a-fA-F0-9]{40}$/.test(value)) {
+    throw new Error(`${key} must be a valid address`);
+  }
+  return value as Address;
 }
 async function fetchFromEdge(
   cursor: number,
   limit: number,
   sort: 'latest' | 'deadline'
 ): Promise<CampaignPage> {
-  const base = env.EDGE;
+  const base = runtimeConfig.edgeUrl;
 
   if (!base) {
     throw new Error('NEXT_PUBLIC_EDGE is not configured');
@@ -112,13 +116,10 @@ async function fetchFromEdge(
 }
 
 async function fetchDirectOnChain(limit: number, cursor: number): Promise<CampaignPage> {
-  const rpcUrl = process.env.NEXT_PUBLIC_RPC_HTTP || 'http://127.0.0.1:8545';
-
-  const chainId = parseNumeric(env.CHAIN_ID) ?? manifest.chainId;
-
-  const factory = ensureAddress(env.FACTORY) ?? manifest.factory;
-
-  const deployBlock = parseBig(env.DEPLOY_BLOCK) ?? BigInt(manifest.deployBlock);
+  const rpcUrl = runtimeConfig.rpcUrl;
+  const chainId = runtimeConfig.chainId;
+  const factory = runtimeConfig.factory;
+  const deployBlock = runtimeConfig.deployBlock;
 
   if (!rpcUrl || !chainId || !factory || deployBlock === undefined) {
     throw new Error('Missing RPC fallback configuration');
