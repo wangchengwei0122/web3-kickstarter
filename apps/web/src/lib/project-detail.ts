@@ -31,8 +31,15 @@ const metadataCache = new Map<string, NormalisedMetadata>();
 
 const WEI_PER_ETH = 1_000_000_000_000_000_000n;
 
-function requireEnv(key: string) {
-  const value = process.env[key];
+const envSource = {
+  NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL,
+  NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID,
+} as const;
+
+type DetailEnvKey = keyof typeof envSource;
+
+function requireEnv(key: DetailEnvKey) {
+  const value = envSource[key];
   if (!value || value.trim().length === 0) {
     throw new Error(`${key} is not configured`);
   }

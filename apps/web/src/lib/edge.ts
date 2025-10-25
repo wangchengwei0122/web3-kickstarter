@@ -29,6 +29,16 @@ export type FetchCampaignOptions = {
   sort?: 'latest' | 'deadline';
 };
 
+const envSource = {
+  NEXT_PUBLIC_EDGE: process.env.NEXT_PUBLIC_EDGE,
+  NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL,
+  NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID,
+  NEXT_PUBLIC_FACTORY: process.env.NEXT_PUBLIC_FACTORY,
+  NEXT_PUBLIC_DEPLOY_BLOCK: process.env.NEXT_PUBLIC_DEPLOY_BLOCK,
+} as const;
+
+type EnvKey = keyof typeof envSource;
+
 const runtimeConfig = {
   edgeUrl: requireEnv('NEXT_PUBLIC_EDGE'),
   rpcUrl: requireEnv('NEXT_PUBLIC_RPC_URL').trim(),
@@ -51,15 +61,15 @@ function getCampaignCreatedEvent(): AbiEvent {
   return event;
 }
 
-function requireEnv(key: string) {
-  const value = process.env[key];
+function requireEnv(key: EnvKey) {
+  const value = envSource[key];
   if (!value || value.trim().length === 0) {
     throw new Error(`${key} is not configured`);
   }
   return value;
 }
 
-function requireNumeric(key: string) {
+function requireNumeric(key: EnvKey) {
   const value = requireEnv(key);
   const parsed = Number.parseInt(value, 10);
   if (Number.isNaN(parsed)) {
@@ -68,7 +78,7 @@ function requireNumeric(key: string) {
   return parsed;
 }
 
-function requireBigInt(key: string) {
+function requireBigInt(key: EnvKey) {
   const value = requireEnv(key);
   try {
     return BigInt(value);
@@ -77,7 +87,7 @@ function requireBigInt(key: string) {
   }
 }
 
-function requireAddress(key: string) {
+function requireAddress(key: EnvKey) {
   const value = requireEnv(key);
   if (!/^0x[a-fA-F0-9]{40}$/.test(value)) {
     throw new Error(`${key} must be a valid address`);
