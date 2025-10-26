@@ -201,7 +201,7 @@ export async function fetchProjectDetail(projectId: string): Promise<ProjectDeta
       number,
       bigint,
     ];
-
+    console.log(summary);
     const metadata = await fetchMetadata(metadataURI as string);
 
     const deadlineSeconds = Number(deadline);
