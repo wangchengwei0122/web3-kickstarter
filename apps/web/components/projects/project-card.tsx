@@ -1,32 +1,33 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
-import type { ProjectSummary } from "./types";
+import type { ProjectSummary } from './types';
 
 export type ProjectCardProps = {
   project: ProjectSummary;
 };
 
-const statusLabel: Record<ProjectSummary["status"], string> = {
-  active: "进行中",
-  successful: "已成功",
-  failed: "未达成",
-  cancelled: "已取消",
+const statusLabel: Record<ProjectSummary['status'], string> = {
+  active: '进行中',
+  successful: '已成功',
+  failed: '未达成',
+  cancelled: '已取消',
 };
 
-const statusClassName: Record<ProjectSummary["status"], string> = {
-  active: "bg-blue-100 text-blue-600",
-  successful: "bg-emerald-100 text-emerald-600",
-  failed: "bg-rose-100 text-rose-600",
-  cancelled: "bg-slate-100 text-slate-500",
+const statusClassName: Record<ProjectSummary['status'], string> = {
+  active: 'bg-blue-100 text-blue-600',
+  successful: 'bg-emerald-100 text-emerald-600',
+  failed: 'bg-rose-100 text-rose-600',
+  cancelled: 'bg-slate-100 text-slate-500',
 };
 
 function formatEth(value: number) {
   if (!Number.isFinite(value)) {
-    return "0 ETH";
+    return '0 ETH';
   }
-  return `${value.toLocaleString("zh-CN", { maximumFractionDigits: 2 })} ETH`;
+  return `${value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ETH`;
 }
 
 export function ProjectCard({ project }: ProjectCardProps) {
@@ -40,7 +41,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
   }, [project.deadline]);
 
   const progress = (() => {
-    if (typeof project.progress === "number") {
+    if (typeof project.progress === 'number') {
       return Math.max(0, Math.min(1, project.progress));
     }
     if (project.goalAmount === 0) {
@@ -89,12 +90,12 @@ export function ProjectCard({ project }: ProjectCardProps) {
           </div>
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span>进度 {Math.round(progress * 100)}%</span>
-            <span>{daysLeft ?? "--"} 天剩余</span>
+            <span>{daysLeft ?? '--'} 天剩余</span>
           </div>
         </div>
 
         <div className="flex items-center justify-between text-sm font-medium text-blue-600">
-          <span>查看项目</span>
+          <Link href={`/projects/${project.id}`}>view project</Link>
           <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-1">
             →
           </span>
