@@ -71,7 +71,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
       <div className="flex flex-1 flex-col gap-6 p-6">
         <div className="space-y-3">
           <p className="text-sm text-slate-500">
-            由 <span className="font-medium text-slate-900">{project.creator}</span> 发起
+            By <span className="font-medium text-slate-900">{project.creator}</span>
           </p>
           <h3 className="text-xl font-semibold text-slate-900">{project.title}</h3>
           <p className="text-sm leading-relaxed text-slate-600">{project.summary}</p>
@@ -80,7 +80,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
         <div className="space-y-3">
           <div className="flex items-center justify-between text-sm font-medium text-slate-600">
             <span>{formatEth(project.pledgedAmount)}</span>
-            <span className="text-slate-400">目标 {formatEth(project.goalAmount)}</span>
+            <span className="text-slate-400">Target {formatEth(project.goalAmount)}</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
             <div
@@ -89,8 +89,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
             />
           </div>
           <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>进度 {Math.round(progress * 100)}%</span>
-            <span>{daysLeft ?? '--'} 天剩余</span>
+            <span>Progress {Math.round(progress * 100)}%</span>
+            <span>{daysLeft ?? '--'} days left</span>
           </div>
         </div>
 
