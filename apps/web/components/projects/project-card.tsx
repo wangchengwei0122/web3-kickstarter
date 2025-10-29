@@ -10,10 +10,10 @@ export type ProjectCardProps = {
 };
 
 const statusLabel: Record<ProjectSummary['status'], string> = {
-  active: '进行中',
-  successful: '已成功',
-  failed: '未达成',
-  cancelled: '已取消',
+  active: 'In Progress',
+  successful: 'Successful',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
 };
 
 const statusClassName: Record<ProjectSummary['status'], string> = {
