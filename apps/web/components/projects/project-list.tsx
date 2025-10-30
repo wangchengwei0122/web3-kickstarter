@@ -1,9 +1,9 @@
-import Link from "next/link";
+import Link from 'next/link';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-import { ProjectCard } from "./project-card";
-import type { ProjectSummary } from "./types";
+import { ProjectCard } from './project-card';
+import type { ProjectSummary } from './types';
 
 export type ProjectListProps = {
   projects: ProjectSummary[];
@@ -14,13 +14,13 @@ export function ProjectList({ projects }: ProjectListProps) {
     return (
       <Card className="border-dashed bg-white/60">
         <CardHeader>
-          <CardTitle className="text-center text-lg">暂未发现众筹项目</CardTitle>
+          <CardTitle className="text-center text-lg">No projects found</CardTitle>
           <CardDescription className="text-center">
-            成为首位发起人，开启你的 Web3 众筹之旅。
+            Be the first to launch a project and start your Web3 crowdfunding journey.
           </CardDescription>
         </CardHeader>
         <CardContent className="pb-6 text-center text-sm text-slate-500">
-          未来这里将展示来自社区的精彩创意。
+          Future projects will be displayed here.
         </CardContent>
       </Card>
     );
