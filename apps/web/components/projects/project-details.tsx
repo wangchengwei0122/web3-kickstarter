@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { Address, Hash } from 'viem';
-import { parseEther } from 'viem';
-import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
+import { formatEther, parseEther } from 'viem';
+import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,7 @@ const presetSupportAmounts = [0.05, 0.1, 0.5, 1];
 export function ProjectDetails({ project }: ProjectDetailsProps) {
   const progress = getProgressValue(project.goalAmount, project.pledgedAmount);
   const daysLeft = getDaysLeft(project.deadline);
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const [amountInput, setAmountInput] = useState<string>('');
   const [activePreset, setActivePreset] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -80,6 +80,28 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
   const isProjectOpen = project.status === 'active' && daysLeft > 0 && !hasReachedGoal;
 
   const campaignAddress = useMemo(() => project.id as Address, [project.id]);
+
+  // 读取当前用户的出资额
+  const {
+    data: userPledgeData,
+    refetch: refetchUserPledge,
+    isPending: isReadingPledge,
+  } = useReadContract({
+    address: campaignAddress,
+    abi: campaignAbi,
+    functionName: 'pledges',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: Boolean(address),
+    },
+  });
+
+  const userPledgeWei = (userPledgeData as bigint | undefined) ?? 0n;
+  const userPledgeEthNum = Number(formatEther(userPledgeWei));
+
+  const canUnpledge = userPledgeWei > 0n && project.status === 'active' && daysLeft > 0;
+  const canRefund =
+    userPledgeWei > 0n && (derivedStatus === 'failed' || (daysLeft === 0 && !hasReachedGoal));
 
   const handlePresetSelect = useCallback((value: number) => {
     setAmountInput(value.toString());
@@ -136,6 +158,8 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
           args: [], //
         });
         setTxHash(hash);
+        // 出资成功后刷新个人出资
+        void refetchUserPledge();
       } catch (error) {
         if (error instanceof Error) {
           setFormError(error.message);
@@ -144,18 +168,80 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
         }
       }
     },
-    [amountInput, campaignAddress, isConnected, writeContractAsync]
+    [amountInput, campaignAddress, isConnected, writeContractAsync, refetchUserPledge]
   );
+
+  const handleRefund = useCallback(async () => {
+    setFormError(null);
+    setFeedback(null);
+    setLastTxHash(null);
+
+    if (!isConnected) {
+      setFormError('Please connect your wallet before operating.');
+      return;
+    }
+
+    try {
+      const hash = await writeContractAsync({
+        address: campaignAddress,
+        abi: campaignAbi,
+        functionName: 'refund',
+        args: [],
+      });
+      setTxHash(hash);
+      void refetchUserPledge();
+    } catch (error) {
+      if (error instanceof Error) {
+        setFormError(error.message);
+      } else {
+        setFormError('Transaction submission failed, please try again later.');
+      }
+    }
+  }, [campaignAddress, isConnected, refetchUserPledge, writeContractAsync]);
+
+  const handleUnpledgeAll = useCallback(async () => {
+    setFormError(null);
+    setFeedback(null);
+    setLastTxHash(null);
+
+    if (!isConnected) {
+      setFormError('Please connect your wallet before operating.');
+      return;
+    }
+
+    if (userPledgeWei <= 0n) {
+      setFormError('No pledge to unpledge.');
+      return;
+    }
+
+    try {
+      const hash = await writeContractAsync({
+        address: campaignAddress,
+        abi: campaignAbi,
+        functionName: 'unpledge',
+        args: [userPledgeWei],
+      });
+      setTxHash(hash);
+      void refetchUserPledge();
+    } catch (error) {
+      if (error instanceof Error) {
+        setFormError(error.message);
+      } else {
+        setFormError('Transaction submission failed, please try again later.');
+      }
+    }
+  }, [campaignAddress, isConnected, userPledgeWei, refetchUserPledge, writeContractAsync]);
 
   useEffect(() => {
     if (isSuccess && txHash) {
-      setFeedback('Support successful, transaction confirmed.');
+      setFeedback('Transaction confirmed.');
       setAmountInput('');
       setActivePreset(null);
       setLastTxHash(txHash);
       setTxHash(null);
+      void refetchUserPledge();
     }
-  }, [isSuccess, txHash]);
+  }, [isSuccess, txHash, refetchUserPledge]);
 
   return (
     <article className="space-y-10">
@@ -307,6 +393,52 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
               Your support will be used for project execution, and cannot be refunded.
             </p>
           </form>
+
+          {/* 当前账户出资与操作 */}
+          <Card className="rounded-[28px] border-0 bg-white p-6 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5">
+            <CardHeader className="px-0">
+              <CardTitle className="text-lg font-semibold text-slate-900">My Pledge</CardTitle>
+            </CardHeader>
+            <CardContent className="px-0 text-sm text-slate-500">
+              {isConnected ? (
+                <div className="space-y-3">
+                  <p className="text-slate-600">
+                    {isReadingPledge
+                      ? 'Loading...'
+                      : `You have pledged: ${formatEth(userPledgeEthNum)}`}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      className="rounded-full text-sm"
+                      variant="secondary"
+                      onClick={handleUnpledgeAll}
+                      disabled={!canUnpledge || isProcessing}
+                    >
+                      {isProcessing ? 'Processing...' : 'Unpledge All'}
+                    </Button>
+                    <Button
+                      className="rounded-full text-sm"
+                      onClick={handleRefund}
+                      disabled={!canRefund || isProcessing}
+                    >
+                      {isProcessing ? 'Processing...' : 'Refund'}
+                    </Button>
+                  </div>
+                  {!canUnpledge &&
+                  project.status === 'active' &&
+                  daysLeft > 0 &&
+                  userPledgeWei === 0n ? (
+                    <p className="text-xs text-slate-400">No pledge yet.</p>
+                  ) : null}
+                  {!canRefund && daysLeft === 0 && !hasReachedGoal && userPledgeWei === 0n ? (
+                    <p className="text-xs text-slate-400">No pledge to refund.</p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-slate-400">Connect wallet to view your pledge.</p>
+              )}
+            </CardContent>
+          </Card>
 
           <Card className="rounded-[28px] border-0 bg-white p-6 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5">
             <CardHeader className="px-0">
