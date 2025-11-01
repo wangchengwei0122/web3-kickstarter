@@ -30,12 +30,56 @@ async function fetchBackers(campaignAddress: Address, publicClient: PublicClient
       return [];
     }
 
+    // 获取当前区块号，用于确定查询范围
+    let currentBlock: bigint;
+    try {
+      currentBlock = await publicClient.getBlockNumber();
+    } catch {
+      console.warn('Failed to get current block number');
+      return [];
+    }
+
+    // 使用合理的区块范围：最近50000个区块（约7天，假设12秒/区块）
+    // 这避免了某些 RPC 节点不支持 'earliest' 或大范围查询的问题
+    const maxBlocksToSearch = 50000n;
+    const fromBlock = currentBlock > maxBlocksToSearch ? currentBlock - maxBlocksToSearch : 0n;
+
     // 获取 Pledged 事件日志
-    const logs = await publicClient.getLogs({
-      address: campaignAddress,
-      event: pledgedEvent,
-      fromBlock: 'earliest',
-    });
+    let logs;
+    try {
+      logs = await publicClient.getLogs({
+        address: campaignAddress,
+        event: pledgedEvent,
+        fromBlock,
+        toBlock: currentBlock,
+      });
+    } catch (error) {
+      // 如果查询失败，尝试使用更小的范围（最近10000个区块）
+      console.warn('Failed to get logs with large range, trying smaller range', error);
+      try {
+        const smallerRange = 10000n;
+        const smallerFromBlock =
+          currentBlock > smallerRange ? currentBlock - smallerRange : 0n;
+        logs = await publicClient.getLogs({
+          address: campaignAddress,
+          event: pledgedEvent,
+          fromBlock: smallerFromBlock,
+          toBlock: currentBlock,
+        });
+      } catch (error2) {
+        // 如果还是失败，只查询最近1000个区块
+        console.warn('Failed to get logs with medium range, trying very recent blocks', error2);
+        const veryRecentRange = 1000n;
+        const veryRecentFromBlock =
+          currentBlock > veryRecentRange ? currentBlock - veryRecentRange : 0n;
+        logs = await publicClient.getLogs({
+          address: campaignAddress,
+          event: pledgedEvent,
+          fromBlock: veryRecentFromBlock,
+          toBlock: currentBlock,
+        });
+      }
+    }
 
     // 获取对应的区块信息以获取时间戳
     const backersWithDetails = await Promise.all(
