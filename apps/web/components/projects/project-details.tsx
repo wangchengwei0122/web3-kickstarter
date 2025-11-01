@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { campaignAbi } from '@packages/contracts/abi';
+import { useBackers } from '@/src/hooks/useBackers';
 
 import type { ProjectDetail } from './types';
 
@@ -55,10 +56,13 @@ export type ProjectDetailsProps = {
 
 const presetSupportAmounts = [0.05, 0.1, 0.5, 1];
 
+type TabType = 'intro' | 'updates' | 'backers';
+
 export function ProjectDetails({ project }: ProjectDetailsProps) {
   const progress = getProgressValue(project.goalAmount, project.pledgedAmount);
   const daysLeft = getDaysLeft(project.deadline);
   const { isConnected, address } = useAccount();
+  const [activeTab, setActiveTab] = useState<TabType>('intro');
   const [amountInput, setAmountInput] = useState<string>('');
   const [activePreset, setActivePreset] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -102,6 +106,13 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
   const canUnpledge = userPledgeWei > 0n && project.status === 'active' && daysLeft > 0;
   const canRefund =
     userPledgeWei > 0n && (derivedStatus === 'failed' || (daysLeft === 0 && !hasReachedGoal));
+
+  // 获取 backers 列表
+  const {
+    data: backers = [],
+    isLoading: isLoadingBackers,
+    refetch: refetchBackers,
+  } = useBackers(campaignAddress);
 
   const handlePresetSelect = useCallback((value: number) => {
     setAmountInput(value.toString());
@@ -240,8 +251,9 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
       setLastTxHash(txHash);
       setTxHash(null);
       void refetchUserPledge();
+      void refetchBackers();
     }
-  }, [isSuccess, txHash, refetchUserPledge]);
+  }, [isSuccess, txHash, refetchUserPledge, refetchBackers]);
 
   return (
     <article className="space-y-10">
@@ -302,13 +314,162 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
           </div>
 
           <div className="rounded-[28px] bg-white p-8 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5">
-            <nav className="flex flex-wrap gap-6 text-sm font-medium text-slate-500">
-              <span className="text-slate-900">Project Introduction</span>
-              <span className="text-slate-300">Progress Updates</span>
-              <span className="text-slate-300">Backers</span>
+            <nav className="flex flex-wrap gap-6 text-sm font-medium">
+              <button
+                type="button"
+                onClick={() => setActiveTab('intro')}
+                className={cn(
+                  'transition hover:text-slate-900',
+                  activeTab === 'intro' ? 'text-slate-900' : 'text-slate-500'
+                )}
+              >
+                Project Introduction
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('updates')}
+                className={cn(
+                  'transition hover:text-slate-900',
+                  activeTab === 'updates' ? 'text-slate-900' : 'text-slate-500'
+                )}
+              >
+                Progress Updates
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('backers')}
+                className={cn(
+                  'transition hover:text-slate-900',
+                  activeTab === 'backers' ? 'text-slate-900' : 'text-slate-500'
+                )}
+              >
+                Backers
+              </button>
             </nav>
-            <div className="mt-6 whitespace-pre-line text-base leading-relaxed text-slate-600">
-              {project.description}
+
+            <div className="mt-6">
+              {activeTab === 'intro' && (
+                <div className="whitespace-pre-line text-base leading-relaxed text-slate-600">
+                  {project.description}
+                </div>
+              )}
+
+              {activeTab === 'updates' && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl bg-slate-50 p-6">
+                    <h3 className="text-lg font-semibold text-slate-900">Funding Progress</h3>
+                    <div className="mt-4 space-y-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">Current Progress</span>
+                        <span className="font-semibold text-slate-900">
+                          {Math.round(progress * 100)}%
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">Pledged Amount</span>
+                        <span className="font-semibold text-slate-900">
+                          {formatEth(project.pledgedAmount)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">Goal Amount</span>
+                        <span className="font-semibold text-slate-900">
+                          {formatEth(project.goalAmount)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">Remaining Amount</span>
+                        <span className="font-semibold text-slate-900">
+                          {formatEth(Math.max(0, project.goalAmount - project.pledgedAmount))}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 p-6">
+                    <h3 className="text-lg font-semibold text-slate-900">Timeline</h3>
+                    <div className="mt-4 space-y-3">
+                      <div className="text-sm text-slate-600">
+                        <p className="font-medium text-slate-900">Campaign Status</p>
+                        <p className="mt-1">
+                          {derivedStatus === 'active' && daysLeft > 0
+                            ? `Active - ${daysLeft} days remaining`
+                            : derivedStatus === 'active' && daysLeft === 0
+                              ? 'Deadline reached, awaiting finalization'
+                              : derivedStatus === 'successful'
+                                ? 'Campaign successfully reached its goal!'
+                                : derivedStatus === 'failed'
+                                  ? 'Campaign did not reach its goal'
+                                  : 'Campaign has been cancelled'}
+                        </p>
+                      </div>
+                      {backers.length > 0 && (
+                        <div className="text-sm text-slate-600">
+                          <p className="font-medium text-slate-900">Latest Activity</p>
+                          <p className="mt-1">
+                            {backers.length} backer{backers.length !== 1 ? 's' : ''} have supported
+                            this project
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {backers.length === 0 && !isLoadingBackers && (
+                    <p className="text-center text-sm text-slate-400">
+                      No activity yet. Be the first to support this project!
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'backers' && (
+                <div className="space-y-4">
+                  {isLoadingBackers ? (
+                    <div className="py-8 text-center text-sm text-slate-500">
+                      Loading backers...
+                    </div>
+                  ) : backers.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-slate-400">
+                      No backers yet. Be the first to support this project!
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm text-slate-600">
+                        Total Backers:{' '}
+                        <span className="font-semibold text-slate-900">{backers.length}</span>
+                      </p>
+                      <div className="space-y-2 divide-y divide-slate-200">
+                        {backers.map((backer, index) => (
+                          <div key={`${backer.txHash}-${index}`} className="py-3 first:pt-0">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium text-slate-900">
+                                  {backer.address.slice(0, 6)}...{backer.address.slice(-4)}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {new Date(backer.timestamp * 1000).toLocaleString('zh-CN', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-semibold text-slate-900">
+                                  {formatEth(Number(backer.amount))}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
