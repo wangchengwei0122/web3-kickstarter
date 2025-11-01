@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 
 import type { ProjectSummary } from './types';
 
@@ -95,7 +94,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
         </div>
 
         <div className="flex items-center justify-between text-sm font-medium text-blue-600">
-          <Link href={`/projects/${project.id}`}>view project</Link>
+          <span>view project</span>
           <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-1">
             →
           </span>

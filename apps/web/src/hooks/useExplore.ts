@@ -1,20 +1,21 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from 'react';
 
-import type { ProjectSummary } from "@/components/projects/types";
-import type { EdgeCampaign } from "@/src/lib/edge";
-import { fetchCampaignPage } from "@/src/lib/edge";
-import { patchCampaignsRealtime } from "@/src/lib/realtime";
+import type { ProjectSummary } from '@/components/projects/types';
+import type { EdgeCampaign } from '@/src/lib/edge';
+import { fetchCampaignPage } from '@/src/lib/edge';
+import { patchCampaignsRealtime } from '@/src/lib/realtime';
 
 const DEFAULT_LIMIT = 12;
 const WEI_PER_ETH = 1_000_000_000_000_000_000n;
 
 const FALLBACK_METADATA = {
-  title: "未命名项目",
-  summary: "该项目的详细描述暂不可用，稍后再试。",
-  imageUrl: "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80",
-  category: "未分类"
+  title: '未命名项目',
+  summary: '该项目的详细描述暂不可用，稍后再试。',
+  imageUrl:
+    'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80',
+  category: '未分类',
 };
 
 type NormalisedMetadata = {
@@ -31,7 +32,7 @@ type UseExploreState = {
   hasMore: boolean;
   isLoading: boolean;
   isError: boolean;
-  source: "edge" | "fallback";
+  source: 'edge' | 'fallback';
 };
 
 type UseExploreReturn = UseExploreState & {
@@ -39,19 +40,19 @@ type UseExploreReturn = UseExploreState & {
   reload: () => void;
 };
 
-const statusMap: Record<number, ProjectSummary["status"]> = {
-  0: "active",
-  1: "successful",
-  2: "failed",
-  3: "cancelled"
+const statusMap: Record<number, ProjectSummary['status']> = {
+  0: 'active',
+  1: 'successful',
+  2: 'failed',
+  3: 'cancelled',
 };
 
 const metadataCache = new Map<string, NormalisedMetadata>();
 
 function resolveMetadataUrl(uri: string) {
   if (!uri) return null;
-  if (uri.startsWith("ipfs://")) {
-    return `https://ipfs.io/ipfs/${uri.slice("ipfs://".length)}`;
+  if (uri.startsWith('ipfs://')) {
+    return `https://ipfs.io/ipfs/${uri.slice('ipfs://'.length)}`;
   }
   return uri;
 }
@@ -68,35 +69,59 @@ async function fetchMetadata(uri: string): Promise<NormalisedMetadata> {
   }
 
   try {
-    const response = await fetch(url, { cache: "no-store" });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时
+
+    const response = await fetch(url, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
+      // 对于 500 错误或其他错误，直接使用 fallback，不抛出异常
+      if (response.status >= 500) {
+        metadataCache.set(uri, FALLBACK_METADATA);
+        return FALLBACK_METADATA;
+      }
       throw new Error(`Metadata fetch failed: ${response.status}`);
     }
     const raw = (await response.json()) as Record<string, unknown>;
     const normalised: NormalisedMetadata = {
-      title: typeof raw.title === "string" && raw.title.trim().length > 0 ? (raw.title as string) : FALLBACK_METADATA.title,
+      title:
+        typeof raw.title === 'string' && raw.title.trim().length > 0
+          ? (raw.title as string)
+          : FALLBACK_METADATA.title,
       summary:
-        typeof raw.summary === "string" && raw.summary.trim().length > 0
+        typeof raw.summary === 'string' && raw.summary.trim().length > 0
           ? (raw.summary as string)
-          : typeof raw.description === "string" && raw.description.trim().length > 0
+          : typeof raw.description === 'string' && raw.description.trim().length > 0
             ? (raw.description as string)
             : FALLBACK_METADATA.summary,
       imageUrl:
-        typeof raw.image === "string" && raw.image.trim().length > 0
+        typeof raw.image === 'string' && raw.image.trim().length > 0
           ? (raw.image as string)
-          : typeof raw.cover === "string" && raw.cover.trim().length > 0
+          : typeof raw.cover === 'string' && raw.cover.trim().length > 0
             ? (raw.cover as string)
             : FALLBACK_METADATA.imageUrl,
       category:
-        typeof raw.category === "string" && raw.category.trim().length > 0
+        typeof raw.category === 'string' && raw.category.trim().length > 0
           ? (raw.category as string)
-          : FALLBACK_METADATA.category
+          : FALLBACK_METADATA.category,
     };
 
     metadataCache.set(uri, normalised);
     return normalised;
   } catch (error) {
-    console.warn("Metadata fetch fallback", error);
+    // 对于网络错误、超时或解析错误，静默使用 fallback
+    // 只在开发环境或非预期错误时记录
+    if (error instanceof Error && !error.name.includes('Abort')) {
+      // 忽略超时错误，其他错误在开发环境记录
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Metadata fetch fallback', uri, error.message);
+      }
+    }
     metadataCache.set(uri, FALLBACK_METADATA);
     return FALLBACK_METADATA;
   }
@@ -129,7 +154,7 @@ async function mapCampaignToSummary(campaign: EdgeCampaign): Promise<ProjectSumm
   const metadata = await fetchMetadata(campaign.metadataURI);
   const pledgedAmount = toEth(campaign.totalPledged);
   const goalAmount = toEth(campaign.goal);
-  const status = statusMap[campaign.status] ?? "active";
+  const status = statusMap[campaign.status] ?? 'active';
   const deadlineIso = new Date(campaign.deadline * 1000).toISOString();
 
   return {
@@ -144,7 +169,7 @@ async function mapCampaignToSummary(campaign: EdgeCampaign): Promise<ProjectSumm
     category: metadata.category,
     imageUrl: metadata.imageUrl,
     progress: computeProgress(campaign.goal, campaign.totalPledged),
-    raw: campaign
+    raw: campaign,
   };
 }
 
@@ -155,7 +180,7 @@ const initialState: UseExploreState = {
   hasMore: true,
   isLoading: false,
   isError: false,
-  source: "edge"
+  source: 'edge',
 };
 
 export function useExplore(limit = DEFAULT_LIMIT): UseExploreReturn {
@@ -167,7 +192,9 @@ export function useExplore(limit = DEFAULT_LIMIT): UseExploreReturn {
       try {
         const page = await fetchCampaignPage({ cursor, limit });
         const patched = await patchCampaignsRealtime(page.campaigns);
-        const projects = await Promise.all(patched.map((campaign) => mapCampaignToSummary(campaign)));
+        const projects = await Promise.all(
+          patched.map((campaign) => mapCampaignToSummary(campaign))
+        );
 
         setState((prev) => ({
           projects: replace ? projects : [...prev.projects, ...projects],
@@ -176,10 +203,10 @@ export function useExplore(limit = DEFAULT_LIMIT): UseExploreReturn {
           hasMore: page.hasMore,
           isLoading: false,
           isError: false,
-          source: page.source
+          source: page.source,
         }));
       } catch (error) {
-        console.error("Failed to load campaigns", error);
+        console.error('Failed to load campaigns', error);
         setState((prev) => ({ ...prev, isLoading: false, isError: true }));
       }
     },
@@ -204,6 +231,6 @@ export function useExplore(limit = DEFAULT_LIMIT): UseExploreReturn {
   return {
     ...state,
     loadMore,
-    reload
+    reload,
   };
 }

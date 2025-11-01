@@ -110,12 +110,32 @@ async function fetchFromEdge(
   url.searchParams.set('limit', limit.toString());
   url.searchParams.set('sort', sort);
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    cache: 'no-store',
-    headers: { Accept: 'application/json' },
-    next: { revalidate: 0 },
-  });
+  let response: Response;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+
+    try {
+      response = await fetch(url.toString(), {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      throw fetchError;
+    }
+  } catch (fetchError) {
+    // 连接被拒绝或其他网络错误
+    if (fetchError instanceof TypeError) {
+      throw fetchError;
+    }
+    throw new Error(
+      `Network error: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`
+    );
+  }
 
   if (!response.ok) {
     throw new Error(`Edge request failed with status ${response.status}`);
@@ -231,7 +251,17 @@ export async function fetchCampaignPage(options: FetchCampaignOptions = {}): Pro
   try {
     return await fetchFromEdge(cursor, limit, sort);
   } catch (error) {
-    console.warn('Edge fetch failed, attempting direct chain fallback', error);
-    return fetchDirectOnChain(limit, cursor);
+    // 只在开发环境或特定错误类型时记录详细错误
+    const isConnectionError =
+      error instanceof TypeError && error.message.includes('Failed to fetch');
+    if (!isConnectionError) {
+      console.warn('Edge fetch failed, attempting direct chain fallback', error);
+    }
+    try {
+      return await fetchDirectOnChain(limit, cursor);
+    } catch (fallbackError) {
+      console.error('Both edge and fallback failed', fallbackError);
+      throw fallbackError;
+    }
   }
 }
