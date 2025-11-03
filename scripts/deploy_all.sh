@@ -46,15 +46,25 @@ CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
 DEPLOY_FILE="$REPO_ROOT/packages/contracts/deployments/$CHAIN_ID.json"
 echo "✅ Deployments written: $DEPLOY_FILE"
 
-# 也可顺手产出一个 addresses.ts 供前端直接 import
+# 生成环境变量提示，方便同步到前端 / Edge 环境
 if command -v jq >/dev/null 2>&1; then
-  FACTORY_ADDR=$(jq -r '.CampaignFactory' "$DEPLOY_FILE" 2>/dev/null || echo "")
-  SAMPLE_ADDR=$(jq -r '.SampleCampaign'    "$DEPLOY_FILE" 2>/dev/null || echo "")
-  {
-    echo "export const campaignFactoryAddress = \"$FACTORY_ADDR\" as \`0x\${string}\`;"
-    echo "export const sampleCampaignAddress  = \"$SAMPLE_ADDR\"  as \`0x\${string}\`;"
-  } > "$DEST_DIR/addresses.ts"
-  echo "✅ ABI & addresses exported to: $DEST_DIR"
+  FACTORY_ADDR=$(
+    jq -r '.factory // .CampaignFactory // empty' "$DEPLOY_FILE" 2>/dev/null || echo ""
+  )
+  SAMPLE_ADDR=$(jq -r '.SampleCampaign // empty' "$DEPLOY_FILE" 2>/dev/null || echo "")
+  DEPLOY_BLOCK=$(jq -r '.deployBlock // empty' "$DEPLOY_FILE" 2>/dev/null || echo "")
+
+  echo "🔑 Suggested environment variables (paste into .env / Vercel UI):"
+  printf '  NEXT_PUBLIC_CHAIN_ID=%s\n' "$CHAIN_ID"
+  if [ -n "$FACTORY_ADDR" ]; then
+    printf '  NEXT_PUBLIC_FACTORY=%s\n' "$FACTORY_ADDR"
+  fi
+  if [ -n "$DEPLOY_BLOCK" ]; then
+    printf '  NEXT_PUBLIC_DEPLOY_BLOCK=%s\n' "$DEPLOY_BLOCK"
+  fi
+  if [ -n "$SAMPLE_ADDR" ]; then
+    printf '  NEXT_PUBLIC_SAMPLE_CAMPAIGN=%s\n' "$SAMPLE_ADDR"
+  fi
 else
-  echo "ℹ️  未安装 jq，已跳过生成 addresses.ts"
+  echo "ℹ️  未安装 jq，已跳过输出环境变量提示"
 fi
