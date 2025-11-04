@@ -18,3 +18,15 @@ fs_permissions = [
   { access = "write", path = "./deployments" }
 ]
 
+# RPC 端点配置
+[rpc_endpoints]
+sepolia = "${SEPOLIA_RPC_URL}"
+# 或者使用默认的 Infura（需要 API key）:
+# sepolia = "https://sepolia.infura.io/v3/${INFURA_API_KEY}"
+# 或者使用 Alchemy:
+# sepolia = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+
+# Etherscan 验证器配置
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
+

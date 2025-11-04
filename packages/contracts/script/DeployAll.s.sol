@@ -39,11 +39,14 @@ contract DeployAll is Script {
     string memory root = vm.projectRoot();
     string memory path = string.concat(root, "/deployments/", vm.toString(block.chainid), ".json");
 
-    // 组织 JSON：{ "chainId": "31337", "factory": "0x..", "deployBlock": "12345" }
+    // 组织 JSON：{ "chainId": "31337", "factory": "0x..", "deployBlock": "12345", "SampleCampaign": "0x.." }
     string memory json;
     json = vm.serializeUint("deployment", "chainId", block.chainid);
     json = vm.serializeAddress("deployment", "factory", address(factory));
     json = vm.serializeUint("deployment", "deployBlock", block.number);
+    if (campaignAddr != address(0)) {
+      json = vm.serializeAddress("deployment", "SampleCampaign", campaignAddr);
+    }
     vm.writeJson(json, path);
 
     console2.log("Wrote deployment file:", path);

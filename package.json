@@ -10,6 +10,7 @@
     "dev": "concurrently -k -n anvil,edge,web \"pnpm dev:anvil\" \"pnpm dev:edge\" \"pnpm dev:web\"",
     "contracts:build": "pnpm --filter @packages/contracts exec forge build",
     "contracts:deploy:local:auto": "bash scripts/deploy_all.sh",
+    "contracts:deploy:sepolia": "bash scripts/deploy_sepolia.sh",
     "deploy:edge": "pnpm --filter @apps/edge run deploy",
     "edge:kv:create": "pnpm --filter @apps/edge kv:create",
     "edge:kv:create:preview": "pnpm --filter @apps/edge kv:create:preview",
