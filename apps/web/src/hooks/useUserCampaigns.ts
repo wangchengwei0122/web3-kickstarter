@@ -165,7 +165,7 @@ export function useUserCampaigns(userAddress: Address | undefined) {
   return useQuery({
     queryKey: ['userCampaigns', userAddress, userCampaigns],
     queryFn: async () => {
-      if (!publicClient || !userCampaigns || userCampaigns.length === 0) {
+      if (!publicClient || !Array.isArray(userCampaigns) || userCampaigns.length === 0) {
         return [];
       }
 
@@ -175,7 +175,8 @@ export function useUserCampaigns(userAddress: Address | undefined) {
 
       return campaigns.filter((c): c is CampaignInfo => c !== null);
     },
-    enabled: Boolean(publicClient && userCampaigns && userCampaigns.length > 0),
+    enabled: Boolean(publicClient && Array.isArray(userCampaigns) && userCampaigns.length > 0),
+
     staleTime: 30000,
   });
 }

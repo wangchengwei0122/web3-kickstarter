@@ -26,12 +26,12 @@ async function fetchBackers(
   try {
     // 从 ABI 中找到 Pledged 事件定义
     const pledgedEvent = campaignAbi.find(
-      (item) => item.type === 'event' && item.name === 'Pledged'
+      // (item) => item.type === 'event' && item.name === 'Pledged'
+      (item): item is Extract<(typeof campaignAbi)[number], { type: 'event'; name: 'Pledged' }> =>
+        item.type === 'event' && item.name === 'Pledged'
     );
 
-    if (!pledgedEvent || pledgedEvent.type !== 'event') {
-      return [];
-    }
+    if (!pledgedEvent) return [];
 
     // 获取当前区块号，用于确定查询范围
     let currentBlock: bigint;
@@ -83,20 +83,41 @@ async function fetchBackers(
       }
     }
 
+    type PledgedLog = {
+      blockNumber: bigint | null;
+      transactionHash: `0x${string}` | null;
+      args: { backer: Address; amount: bigint };
+    };
+    const typedLogs = logs as PledgedLog[];
+
     // 获取对应的区块信息以获取时间戳
-    const backersWithDetails = await Promise.all(
-      logs.map(async (log) => {
+    const backersWithMaybeNull = await Promise.all(
+      typedLogs.map(async (log) => {
+        // viem 的 Log 类型在 pending 情况下 blockNumber/transactionHash 可能为 null
+        if (log.blockNumber == null || log.transactionHash == null) {
+          return null;
+        }
+
         const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
-        const amountWei = log.args.amount as bigint;
+        // const amountWei = log.args.amount as bigint;
+        const { backer, amount } = log.args as { backer: Address; amount: bigint };
+        const amountWei = amount;
+
         return {
-          address: log.args.backer as Address,
+          // address: log.args.backer as Address,
+          address: backer,
+
           amount: formatEther(amountWei),
           amountWei,
           timestamp: Number(block.timestamp),
           blockNumber: log.blockNumber,
           txHash: log.transactionHash,
-        };
+        } as BackerRecord;
       })
+    );
+
+    const backersWithDetails = backersWithMaybeNull.filter(
+      (item): item is BackerRecord => item !== null
     );
 
     // 按时间倒序排列（最新的在前）
