@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { usePublicClient } from 'wagmi';
 import type { Address, PublicClient } from 'viem';
-import { campaignAbi } from '@lib/abi';
+import { campaignAbi } from '@/lib/abi';
 import type { CampaignInfo } from './useUserCampaigns';
 
 const WEI_PER_ETH = 1_000_000_000_000_000_000n;

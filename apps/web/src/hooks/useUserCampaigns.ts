@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useReadContract, usePublicClient } from 'wagmi';
 import type { Address, PublicClient } from 'viem';
-import { campaignFactoryAbi, campaignAbi } from '@lib/abi';
+import { campaignFactoryAbi, campaignAbi } from '@/lib/abi';
 
 export type CampaignInfo = {
   address: Address;

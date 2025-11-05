@@ -1,5 +1,5 @@
 import { createPublicClient, http, type AbiEvent, type Address, type PublicClient } from 'viem';
-import { campaignAbi, campaignFactoryAbi } from '@lib/abi';
+import { campaignAbi, campaignFactoryAbi } from '@/lib/abi';
 
 export type EdgeCampaign = {
   address: Address;

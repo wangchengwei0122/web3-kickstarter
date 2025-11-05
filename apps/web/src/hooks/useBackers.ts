@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { usePublicClient } from 'wagmi';
 import type { Address, PublicClient } from 'viem';
 import { formatEther } from 'viem';
-import { campaignAbi } from '@lib/abi';
+import { campaignAbi } from '@/lib/abi';
 
 export type BackerRecord = {
   address: Address;
