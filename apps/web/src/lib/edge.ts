@@ -199,7 +199,8 @@ async function fetchDirectOnChain(limit: number, cursor: number): Promise<Campai
 
   const campaigns = await Promise.all(
     pageLogs.map(async (log) => {
-      const address = log.args.campaign as Address;
+      const { campaign } = log.args as { campaign: Address };
+      const address = campaign;
       try {
         const { summary, metadata } = await readSummarySafe(client, address);
 
