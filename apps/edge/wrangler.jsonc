@@ -7,7 +7,9 @@
 	"workers_dev": true,
 	// 定时任务（cron）
 	"triggers": {
-		"crons": ["*/1 * * * *"],
+		"crons": [
+			"*/1 * * * *"
+		],
 	},
 	// 绑定的 KV 命名空间
 	"kv_namespaces": [
@@ -20,9 +22,9 @@
 	],
 	// 环境变量
 	"vars": {
-		// "RPC_URL": "https://eth.merkle.io",
-		// "CHAIN_ID": "31337",
-		// "FACTORY": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
-		// "DEPLOY_BLOCK": "0"
+		"RPC_URL": "https://eth-sepolia.g.alchemy.com/v2/2HgTNtpC8jbxtd9VKqMjVvU0_PfLu1N_",
+		"CHAIN_ID": "11155111",
+		"FACTORY": "0xc903BC1fE1B36bF97715627C7E2a9a38541bafc1",
+		"DEPLOY_BLOCK": "9557858"
 	},
 }
