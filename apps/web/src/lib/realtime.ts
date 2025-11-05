@@ -1,7 +1,7 @@
-import { createPublicClient, http, type Address } from "viem";
-import { campaignAbi } from "@packages/contracts/abi";
+import { createPublicClient, http, type Address } from 'viem';
+import { campaignAbi } from '@lib/abi';
 
-import type { EdgeCampaign } from "./edge";
+import type { EdgeCampaign } from './edge';
 
 function resolveEnv(key: string) {
   const value = process.env[key];
@@ -9,7 +9,7 @@ function resolveEnv(key: string) {
 }
 
 function resolveChainId(): number | undefined {
-  const envChain = resolveEnv("NEXT_PUBLIC_CHAIN_ID");
+  const envChain = resolveEnv('NEXT_PUBLIC_CHAIN_ID');
   if (envChain) {
     const parsed = Number.parseInt(envChain, 10);
     if (!Number.isNaN(parsed)) {
@@ -20,7 +20,7 @@ function resolveChainId(): number | undefined {
 }
 
 function resolveRpcUrl() {
-  return resolveEnv("NEXT_PUBLIC_RPC_URL");
+  return resolveEnv('NEXT_PUBLIC_RPC_URL');
 }
 
 function resolveClient() {
@@ -34,10 +34,10 @@ function resolveClient() {
     chain: {
       id: chainId,
       name: `chain-${chainId}`,
-      nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-      rpcUrls: { default: { http: [rpcUrl] }, public: { http: [rpcUrl] } }
+      nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+      rpcUrls: { default: { http: [rpcUrl] }, public: { http: [rpcUrl] } },
     },
-    transport: http(rpcUrl)
+    transport: http(rpcUrl),
   });
 }
 
@@ -54,17 +54,17 @@ export async function patchCampaignsRealtime(campaigns: EdgeCampaign[]): Promise
   const contracts = campaigns.map((campaign) => ({
     address: campaign.address as Address,
     abi: campaignAbi,
-    functionName: "getSummary" as const
+    functionName: 'getSummary' as const,
   }));
 
   const results = await client.multicall({
     allowFailure: true,
-    contracts
+    contracts,
   });
 
   return campaigns.map((campaign, index) => {
     const outcome = results[index];
-    if (!outcome || outcome.status !== "success") {
+    if (!outcome || outcome.status !== 'success') {
       return campaign;
     }
 
@@ -73,13 +73,13 @@ export async function patchCampaignsRealtime(campaigns: EdgeCampaign[]): Promise
       bigint,
       bigint,
       number,
-      bigint
+      bigint,
     ];
 
     return {
       ...campaign,
       status: Number(status),
-      totalPledged: totalPledged.toString()
+      totalPledged: totalPledged.toString(),
     } satisfies EdgeCampaign;
   });
 }

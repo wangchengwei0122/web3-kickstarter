@@ -1,5 +1,5 @@
 import { createPublicClient, http, type Address } from 'viem';
-import { campaignAbi } from '@packages/contracts/abi';
+import { campaignAbi } from '@lib/abi';
 
 import type { ProjectDetail } from '@/components/projects/types';
 

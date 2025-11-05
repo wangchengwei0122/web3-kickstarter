@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { campaignAbi } from '@packages/contracts/abi';
+import { campaignAbi } from '@lib/abi';
 import { useBackers } from '@/src/hooks/useBackers';
 
 import type { ProjectDetail } from './types';

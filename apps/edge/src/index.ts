@@ -1,5 +1,5 @@
 import { createPublicClient, http, type AbiEvent, type Address } from 'viem';
-import { campaignAbi, campaignFactoryAbi } from '@packages/contracts/abi';
+import { campaignAbi, campaignFactoryAbi } from '../abi';
 
 const DEFAULT_LIMIT = 12;
 const MAX_INDEX_SIZE = 1024;

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { usePublicClient } from 'wagmi';
 import type { Address, PublicClient } from 'viem';
 import { formatEther } from 'viem';
-import { campaignAbi } from '@packages/contracts/abi';
+import { campaignAbi } from '@lib/abi';
 
 export type BackerRecord = {
   address: Address;
@@ -15,7 +15,10 @@ export type BackerRecord = {
   txHash: `0x${string}`;
 };
 
-async function fetchBackers(campaignAddress: Address, publicClient: PublicClient): Promise<BackerRecord[]> {
+async function fetchBackers(
+  campaignAddress: Address,
+  publicClient: PublicClient
+): Promise<BackerRecord[]> {
   if (!publicClient) {
     return [];
   }
@@ -58,8 +61,7 @@ async function fetchBackers(campaignAddress: Address, publicClient: PublicClient
       console.warn('Failed to get logs with large range, trying smaller range', error);
       try {
         const smallerRange = 10000n;
-        const smallerFromBlock =
-          currentBlock > smallerRange ? currentBlock - smallerRange : 0n;
+        const smallerFromBlock = currentBlock > smallerRange ? currentBlock - smallerRange : 0n;
         logs = await publicClient.getLogs({
           address: campaignAddress,
           event: pledgedEvent,
@@ -120,4 +122,3 @@ export function useBackers(campaignAddress: Address | undefined) {
     staleTime: 30000, // 30秒内不重新获取
   });
 }
-

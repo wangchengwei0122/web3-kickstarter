@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { usePublicClient } from 'wagmi';
 import type { Address, PublicClient } from 'viem';
-import { campaignAbi } from '@packages/contracts/abi';
+import { campaignAbi } from '@lib/abi';
 import type { CampaignInfo } from './useUserCampaigns';
 
 const WEI_PER_ETH = 1_000_000_000_000_000_000n;
@@ -119,8 +119,7 @@ async function fetchSupportedCampaigns(
       console.warn('Failed to get logs with large range, trying smaller range', error);
       try {
         const smallerRange = 10000n;
-        const smallerFromBlock =
-          currentBlock > smallerRange ? currentBlock - smallerRange : 0n;
+        const smallerFromBlock = currentBlock > smallerRange ? currentBlock - smallerRange : 0n;
         logs = await publicClient.getLogs({
           event: pledgedEvent,
           args: {
@@ -218,4 +217,3 @@ export function useSupportedCampaigns(userAddress: Address | undefined) {
     staleTime: 30000,
   });
 }
-
