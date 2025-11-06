@@ -59,6 +59,7 @@ const presetSupportAmounts = [0.05, 0.1, 0.5, 1];
 type TabType = 'intro' | 'updates' | 'backers';
 
 export function ProjectDetails({ project }: ProjectDetailsProps) {
+  console.log(project);
   const progress = getProgressValue(project.goalAmount, project.pledgedAmount);
   const daysLeft = getDaysLeft(project.deadline);
   const { isConnected, address } = useAccount();
@@ -82,6 +83,18 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
 
   const isProcessing = isWriting || isConfirming;
   const isProjectOpen = project.status === 'active' && daysLeft > 0 && !hasReachedGoal;
+
+  const isCreator = useMemo(() => {
+    if (!address) return false;
+    try {
+      return address.toLowerCase() === (project.owner ?? project.creator).toLowerCase();
+    } catch {
+      return false;
+    }
+  }, [address, project.owner, project.creator]);
+
+  // 可领取条件：到期且达到目标且尚未finalize（合约状态仍为 Active）
+  const isFinalizable = project.status === 'active' && daysLeft === 0 && hasReachedGoal;
 
   const campaignAddress = useMemo(() => project.id as Address, [project.id]);
 
@@ -242,6 +255,33 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
       }
     }
   }, [campaignAddress, isConnected, userPledgeWei, refetchUserPledge, writeContractAsync]);
+
+  const handleFinalize = useCallback(async () => {
+    setFormError(null);
+    setFeedback(null);
+    setLastTxHash(null);
+
+    if (!isConnected) {
+      setFormError('Please connect your wallet before operating.');
+      return;
+    }
+
+    try {
+      const hash = await writeContractAsync({
+        address: campaignAddress,
+        abi: campaignAbi,
+        functionName: 'finalize',
+        args: [],
+      });
+      setTxHash(hash);
+    } catch (error) {
+      if (error instanceof Error) {
+        setFormError(error.message);
+      } else {
+        setFormError('Transaction submission failed, please try again later.');
+      }
+    }
+  }, [campaignAddress, isConnected, writeContractAsync]);
 
   useEffect(() => {
     if (isSuccess && txHash) {
@@ -475,93 +515,115 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
         </div>
 
         <aside className="space-y-6">
-          <form
-            className="rounded-[28px] bg-white p-6 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5"
-            onSubmit={handleSupport}
-          >
-            <h2 className="text-lg font-semibold text-slate-900">Support the Project</h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Your every support will be directly used for the project.
-            </p>
+          {isCreator && isFinalizable && (
+            <Card className="rounded-[28px] border-0 bg-white p-6 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5">
+              <CardHeader className="px-0">
+                <CardTitle className="text-lg font-semibold text-slate-900">Claim Funds</CardTitle>
+              </CardHeader>
+              <CardContent className="px-0 text-sm text-slate-500">
+                <p className="mb-4 text-slate-600">
+                  The campaign reached its goal. You can finalize to claim funds.
+                </p>
+                <Button
+                  className="rounded-full text-sm"
+                  onClick={handleFinalize}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? 'Processing...' : 'Finalize & Claim'}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              {presetSupportAmounts.map((amount) => {
-                const isActive = activePreset === amount;
-                return (
-                  <button
-                    key={amount}
-                    type="button"
-                    onClick={() => handlePresetSelect(amount)}
-                    className={cn(
-                      'rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition',
-                      'hover:border-sky-400 hover:text-sky-500',
-                      isActive && 'border-sky-500 bg-sky-50 text-sky-600'
-                    )}
-                    disabled={!isProjectOpen || isProcessing}
-                  >
-                    {amount}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 space-y-3">
-              <label className="text-xs font-medium text-slate-500" htmlFor="support-amount">
-                Custom Support Amount (ETH)
-              </label>
-              <Input
-                id="support-amount"
-                type="number"
-                min="0"
-                step="any"
-                placeholder="0.1"
-                className="h-11 rounded-full border-slate-200"
-                value={amountInput}
-                onChange={handleAmountChange}
-                disabled={!isProjectOpen || isProcessing}
-              />
-            </div>
-
-            {formError ? (
-              <p className="mt-3 text-xs text-rose-500">{formError}</p>
-            ) : feedback ? (
-              <p className="mt-3 text-xs text-emerald-600">
-                {feedback}
-                {lastTxHash ? (
-                  <>
-                    {' '}
-                    <span className="break-all text-[11px] text-emerald-500">{lastTxHash}</span>
-                  </>
-                ) : null}
-              </p>
-            ) : null}
-
-            {!isProjectOpen ? (
-              <p className="mt-3 text-xs text-slate-400">
-                This project has ended or is not supported.
-              </p>
-            ) : null}
-
-            <Button
-              className="mt-6 w-full rounded-full text-sm"
-              type="submit"
-              disabled={!isProjectOpen || isProcessing}
+          {project.status === 'active' && (
+            <form
+              className="rounded-[28px] bg-white p-6 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5"
+              onSubmit={handleSupport}
             >
-              {isProcessing ? 'Transaction Confirming...' : 'Support Now'}
-            </Button>
+              <h2 className="text-lg font-semibold text-slate-900">Support the Project</h2>
+              <p className="mt-2 text-sm text-slate-500">
+                Your every support will be directly used for the project.
+              </p>
 
-            <p className="mt-3 text-center text-xs text-slate-400">
-              Your support will be used for project execution, and cannot be refunded.
-            </p>
-          </form>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                {presetSupportAmounts.map((amount) => {
+                  const isActive = activePreset === amount;
+                  return (
+                    <button
+                      key={amount}
+                      type="button"
+                      onClick={() => handlePresetSelect(amount)}
+                      className={cn(
+                        'rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition',
+                        'hover:border-sky-400 hover:text-sky-500',
+                        isActive && 'border-sky-500 bg-sky-50 text-sky-600'
+                      )}
+                      disabled={!isProjectOpen || isProcessing}
+                    >
+                      {amount}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 space-y-3">
+                <label className="text-xs font-medium text-slate-500" htmlFor="support-amount">
+                  Custom Support Amount (ETH)
+                </label>
+                <Input
+                  id="support-amount"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="0.1"
+                  className="h-11 rounded-full border-slate-200"
+                  value={amountInput}
+                  onChange={handleAmountChange}
+                  disabled={!isProjectOpen || isProcessing}
+                />
+              </div>
+
+              {formError ? (
+                <p className="mt-3 text-xs text-rose-500">{formError}</p>
+              ) : feedback ? (
+                <p className="mt-3 text-xs text-emerald-600">
+                  {feedback}
+                  {lastTxHash ? (
+                    <>
+                      {' '}
+                      <span className="break-all text-[11px] text-emerald-500">{lastTxHash}</span>
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+
+              {!isProjectOpen ? (
+                <p className="mt-3 text-xs text-slate-400">
+                  This project has ended or is not supported.
+                </p>
+              ) : null}
+
+              <Button
+                className="mt-6 w-full rounded-full text-sm"
+                type="submit"
+                disabled={!isProjectOpen || isProcessing}
+              >
+                {isProcessing ? 'Transaction Confirming...' : 'Support Now'}
+              </Button>
+
+              <p className="mt-3 text-center text-xs text-slate-400">
+                Your support will be used for project execution, and cannot be refunded.
+              </p>
+            </form>
+          )}
 
           {/* 当前账户出资与操作 */}
-          <Card className="rounded-[28px] border-0 bg-white p-6 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5">
-            <CardHeader className="px-0">
-              <CardTitle className="text-lg font-semibold text-slate-900">My Pledge</CardTitle>
-            </CardHeader>
-            <CardContent className="px-0 text-sm text-slate-500">
-              {isConnected ? (
+          {isConnected && userPledgeWei > 0n && (
+            <Card className="rounded-[28px] border-0 bg-white p-6 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5">
+              <CardHeader className="px-0">
+                <CardTitle className="text-lg font-semibold text-slate-900">My Pledge</CardTitle>
+              </CardHeader>
+              <CardContent className="px-0 text-sm text-slate-500">
                 <div className="space-y-3">
                   <p className="text-slate-600">
                     {isReadingPledge
@@ -585,21 +647,10 @@ export function ProjectDetails({ project }: ProjectDetailsProps) {
                       {isProcessing ? 'Processing...' : 'Refund'}
                     </Button>
                   </div>
-                  {!canUnpledge &&
-                  project.status === 'active' &&
-                  daysLeft > 0 &&
-                  userPledgeWei === 0n ? (
-                    <p className="text-xs text-slate-400">No pledge yet.</p>
-                  ) : null}
-                  {!canRefund && daysLeft === 0 && !hasReachedGoal && userPledgeWei === 0n ? (
-                    <p className="text-xs text-slate-400">No pledge to refund.</p>
-                  ) : null}
                 </div>
-              ) : (
-                <p className="text-slate-400">Connect wallet to view your pledge.</p>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="rounded-[28px] border-0 bg-white p-6 shadow-lg shadow-blue-950/5 ring-1 ring-slate-900/5">
             <CardHeader className="px-0">
