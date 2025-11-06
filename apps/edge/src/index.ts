@@ -289,6 +289,9 @@ async function runIndexer(env: Env) {
 	const deployBlock = resolveDeployBlock(env.DEPLOY_BLOCK);
 	const client = createClient(env);
 
+	// ⚠️ 每次只处理 10 个区块，符合 Alchemy 免费额度
+	const BLOCK_BATCH = 10n;
+
 	const lastProcessedRaw = await env.KV.get(checkpointKey(env));
 	const fromBlock = lastProcessedRaw ? parseRequiredBigInt(lastProcessedRaw, 'checkpoint') + 1n : deployBlock;
 	const headBlock = await withRetry(() => client.getBlockNumber());
@@ -298,43 +301,48 @@ async function runIndexer(env: Env) {
 		return;
 	}
 
+	const safeToBlock = fromBlock + BLOCK_BATCH - 1n > headBlock ? headBlock : fromBlock + BLOCK_BATCH - 1n;
+
 	const logs = await withRetry(() =>
 		client.getLogs({
 			address: factoryAddress,
 			event: campaignCreatedEvent,
 			fromBlock,
-			toBlock: headBlock,
+			toBlock: safeToBlock,
 		}),
 	);
+
+	console.log(`📦 Processing ${logs.length} logs from ${fromBlock} to ${safeToBlock}`);
 
 	for (const log of logs) {
 		const campaignAddress = log.args.campaign as Address;
 		const existing = await loadCampaign(env, campaignAddress);
-		if (existing) {
-			continue;
-		}
+		if (existing) continue;
 
-		const [summary, metadata] = await withRetry(() =>
-			client.multicall({
+		let summary, metadata;
+		try {
+			[summary, metadata] = await client.multicall({
 				allowFailure: false,
 				contracts: [
-					{
-						address: campaignAddress,
-						abi: campaignAbi,
-						functionName: 'getSummary',
-					},
-					{
-						address: campaignAddress,
-						abi: campaignAbi,
-						functionName: 'metadataURI',
-					},
+					{ address: campaignAddress, abi: campaignAbi, functionName: 'getSummary' },
+					{ address: campaignAddress, abi: campaignAbi, functionName: 'metadataURI' },
 				],
-			}),
-		);
+			});
+		} catch {
+			summary = await client.readContract({
+				address: campaignAddress,
+				abi: campaignAbi,
+				functionName: 'getSummary',
+			});
+			metadata = await client.readContract({
+				address: campaignAddress,
+				abi: campaignAbi,
+				functionName: 'metadataURI',
+			});
+		}
 
 		const [creator, goal, deadline, status, totalPledged] = summary as [Address, bigint, bigint, number, bigint];
-
-		const block = await withRetry(() => client.getBlock({ blockNumber: log.blockNumber }));
+		const block = await client.getBlock({ blockNumber: log.blockNumber });
 
 		const record: CampaignRecord = {
 			address: campaignAddress,
@@ -351,10 +359,8 @@ async function runIndexer(env: Env) {
 		await persistCampaign(env, record);
 	}
 
-	const newCheckpoint = logs.length > 0 ? logs[logs.length - 1]!.blockNumber : headBlock;
-	await env.KV.put(checkpointKey(env), newCheckpoint.toString());
+	await env.KV.put(checkpointKey(env), safeToBlock.toString());
 }
-
 async function handleHealthRequest(env: Env) {
 	const client = createClient(env);
 	const [checkpointRaw, latestIndex, headNumber] = await Promise.all([
@@ -390,6 +396,35 @@ export default {
 
 		let response: Response;
 		try {
+			if (request.method === 'GET' && url.pathname === '/run') {
+				// await runIndexer(env);
+				// return jsonResponse({ ok: true, msg: 'Indexer executed manually' });
+
+				try {
+					await runIndexer(env);
+					return jsonResponse({ ok: true, msg: 'Indexer executed successfully' });
+				} catch (err: any) {
+					console.error('Indexer run failed', err);
+					return jsonResponse({
+						ok: false,
+						error: err?.message ?? 'Unknown error',
+						stack: err?.stack ?? null,
+					});
+				}
+			}
+
+			if (request.method === 'GET' && url.pathname === '/debug') {
+				const kvList = await env.KV.list();
+				const checkpoint = await env.KV.get(checkpointKey(env));
+				return jsonResponse({
+					kvCount: kvList.keys.length,
+					checkpoint,
+					factory: env.FACTORY,
+					deployBlock: env.DEPLOY_BLOCK,
+					rpc: env.RPC_URL,
+				});
+			}
+
 			if (request.method === 'GET' && url.pathname === '/campaigns') {
 				response = await handleCampaignsRequest(request, env);
 				ctx.waitUntil(runIndexer(env));
