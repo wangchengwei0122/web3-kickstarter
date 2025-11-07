@@ -7,19 +7,25 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "migrate:gen": "drizzle-kit generate",
+    "migrate:push": "drizzle-kit push"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@packages/contracts": "workspace:*",
+    "better-sqlite3": "^12.4.1",
     "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.44.7",
+    "pino": "^10.1.0",
     "viem": "^2.38.6",
-    "ws": "^8.18.3",
-    "@packages/contracts": "workspace:*"
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
+    "drizzle-kit": "^0.31.6",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }
