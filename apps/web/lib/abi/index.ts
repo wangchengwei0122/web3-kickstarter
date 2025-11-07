@@ -1,6 +1,6 @@
 import type { Abi } from "viem";
-import campaignArtifact from "./Campaign.json";
-import campaignFactoryArtifact from "./CampaignFactory.json";
+import campaignArtifact from "@packages/contracts/abi/Campaign.json";
+import campaignFactoryArtifact from "@packages/contracts/abi/CampaignFactory.json";
 
 export const campaignAbi = campaignArtifact.abi as Abi;
 export const campaignFactoryAbi = campaignFactoryArtifact.abi as Abi;
