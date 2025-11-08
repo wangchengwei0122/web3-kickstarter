@@ -3,6 +3,8 @@ import type { Config } from 'drizzle-kit';
 export default {
   schema: './src/db/schema.ts',
   out: './drizzle',
-  driver: 'better-sqlite',
-  dbCredentials: { url: '../../data/app.db' }, // 数据库存放在 /data/app.db
+  dialect: 'sqlite', // ✅ 新版本必须写 dialect
+  dbCredentials: {
+    url: '../../data/app.db', // 相对路径到你的数据库文件
+  },
 } satisfies Config;
