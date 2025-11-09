@@ -1,21 +1,20 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
-import { sql } from 'drizzle-orm';
+import { pgTable, serial, text, bigint, integer, timestamp } from 'drizzle-orm/pg-core';
 
-export const checkpoints = sqliteTable('checkpoints', {
-  id: text('id').primaryKey().notNull(), // factory:<address>
-  block: integer('block', { mode: 'bigint' }),
-  updatedAt: integer('updated_at').default(sql`(strftime('%s','now'))`),
-});
-
-export const campaigns = sqliteTable('campaigns', {
-  address: text('address').primaryKey(),
+export const campaigns = pgTable('campaigns', {
+  id: serial('id').primaryKey(),
+  address: text('address').notNull(),
   creator: text('creator').notNull(),
   goal: text('goal').notNull(),
-  deadline: integer('deadline').notNull(),
-  status: integer('status').notNull(),
+  deadline: bigint('deadline', { mode: 'number' }).notNull(),
+  status: integer('status').default(0).notNull(),
   totalPledged: text('total_pledged').notNull(),
   metadataURI: text('metadata_uri').notNull(),
-  createdAt: integer('created_at').notNull(),
-  createdBlock: integer('created_block').notNull(),
-  updatedAt: integer('updated_at').default(sql`(strftime('%s','now'))`),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  createdBlock: bigint('created_block', { mode: 'number' }).notNull(),
+});
+
+export const checkpoints = pgTable('checkpoints', {
+  id: serial('id').primaryKey(),
+  lastIndexedBlock: bigint('last_indexed_block', { mode: 'number' }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
