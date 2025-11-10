@@ -40,6 +40,9 @@ interface Env {
 	CHAIN_ID: string;
 	FACTORY: string;
 	DEPLOY_BLOCK: string;
+	INDEXER_ENABLED?: string; // "true" to enable background indexing
+	INDEX_INTERVAL_MS?: string; // minimum interval between runs
+	INDEXER_KEY?: string; // manual /run auth key
 }
 
 const corsHeaders: Record<string, string> = {
@@ -85,6 +88,10 @@ function deadlineIndexKey(env: Env) {
 
 function checkpointKey(env: Env) {
 	return `${keyPrefixForFactory(env)}:checkpoint`;
+}
+
+function lastRunKey(env: Env) {
+	return `${keyPrefixForFactory(env)}:lastRun`;
 }
 
 function campaignKey(env: Env, address: string) {
@@ -149,6 +156,32 @@ function parseRequiredBigInt(value: string, label: string): bigint {
 		return BigInt(value);
 	} catch (error) {
 		throw new Error(`Invalid ${label}: ${value}`);
+	}
+}
+
+async function shouldRunIndexer(env: Env) {
+	// Only run when explicitly enabled
+	if (env.INDEXER_ENABLED !== 'true') return false;
+
+	const now = Date.now();
+	const minInterval = Number.parseInt(env.INDEX_INTERVAL_MS ?? '', 10) || 15 * 60 * 1000; // default 15m
+
+	const last = await env.KV.get(lastRunKey(env));
+	if (!last) {
+		await env.KV.put(lastRunKey(env), String(now));
+		return true;
+	}
+	const lastNum = Number.parseInt(last, 10);
+	if (!Number.isFinite(lastNum) || now - lastNum >= minInterval) {
+		await env.KV.put(lastRunKey(env), String(now));
+		return true;
+	}
+	return false;
+}
+
+async function maybeScheduleIndexer(env: Env, ctx: ExecutionContext) {
+	if (await shouldRunIndexer(env)) {
+		ctx.waitUntil(runIndexer(env));
 	}
 }
 
@@ -289,8 +322,8 @@ async function runIndexer(env: Env) {
 	const deployBlock = resolveDeployBlock(env.DEPLOY_BLOCK);
 	const client = createClient(env);
 
-	// ⚠️ 每次只处理 10 个区块，符合 Alchemy 免费额度
-	const BLOCK_BATCH = 10n;
+	// ⚠️ 每次只处理 5 个区块，符合 Alchemy 免费额度
+	const BLOCK_BATCH = 5n;
 
 	const lastProcessedRaw = await env.KV.get(checkpointKey(env));
 	const fromBlock = lastProcessedRaw ? parseRequiredBigInt(lastProcessedRaw, 'checkpoint') + 1n : deployBlock;
@@ -397,9 +430,10 @@ export default {
 		let response: Response;
 		try {
 			if (request.method === 'GET' && url.pathname === '/run') {
-				// await runIndexer(env);
-				// return jsonResponse({ ok: true, msg: 'Indexer executed manually' });
-
+				const provided = request.headers.get('x-indexer-key') ?? url.searchParams.get('key');
+				if (env.INDEXER_KEY && provided !== env.INDEXER_KEY) {
+					return jsonResponse({ ok: false, error: 'Unauthorized' }, { status: 401 });
+				}
 				try {
 					await runIndexer(env);
 					return jsonResponse({ ok: true, msg: 'Indexer executed successfully' });
@@ -422,15 +456,18 @@ export default {
 					factory: env.FACTORY,
 					deployBlock: env.DEPLOY_BLOCK,
 					rpc: env.RPC_URL,
+					enabled: env.INDEXER_ENABLED === 'true',
+					intervalMs: Number.parseInt(env.INDEX_INTERVAL_MS ?? '', 10) || 15 * 60 * 1000,
+					lastRun: await env.KV.get(lastRunKey(env)),
 				});
 			}
 
 			if (request.method === 'GET' && url.pathname === '/campaigns') {
 				response = await handleCampaignsRequest(request, env);
-				ctx.waitUntil(runIndexer(env));
+				await maybeScheduleIndexer(env, ctx);
 			} else if (request.method === 'GET' && url.pathname === '/health') {
 				response = await handleHealthRequest(env);
-				ctx.waitUntil(runIndexer(env));
+				await maybeScheduleIndexer(env, ctx);
 			} else {
 				response = jsonResponse({ error: 'Not Found' }, { status: 404 });
 			}
@@ -443,6 +480,6 @@ export default {
 		return withCors({ status: response.status, statusText: response.statusText, headers: response.headers }, response.body ?? null);
 	},
 	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-		ctx.waitUntil(runIndexer(env));
+		await maybeScheduleIndexer(env, ctx);
 	},
 } satisfies ExportedHandler<Env>;
