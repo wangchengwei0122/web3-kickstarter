@@ -6,5 +6,8 @@ export default {
   dialect: 'postgresql',
   dbCredentials: {
     url: process.env.DATABASE_URL!,
+    ssl: {
+      rejectUnauthorized: false, // 关键
+    },
   },
 } satisfies Config;
