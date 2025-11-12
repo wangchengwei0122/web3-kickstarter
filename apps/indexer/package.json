@@ -5,11 +5,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx watch src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json",
-    "migrate:gen": "drizzle-kit generate",
-    "migrate:push": "drizzle-kit push"
+    "migrate:gen": "NODE_TLS_REJECT_UNAUTHORIZED=0 drizzle-kit generate",
+    "migrate:push": "NODE_TLS_REJECT_UNAUTHORIZED=0 drizzle-kit push"
   },
   "keywords": [],
   "author": "",
