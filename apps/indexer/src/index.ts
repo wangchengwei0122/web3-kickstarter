@@ -17,6 +17,9 @@ const MAX_RETRIES = Number(process.env.MAX_RETRIES ?? '3'); // 最大重试次�
 const RETRY_DELAY_MS = Number(process.env.RETRY_DELAY_MS ?? '1000'); // 重试延迟（毫秒）
 const UPDATE_INTERVAL_MS = Number(process.env.UPDATE_INTERVAL_MS ?? '60000'); // 定期更新间隔（60秒）
 
+// 验证 RPC URL 配置
+validateRpcUrl(RPC_HTTP);
+
 // 创建 viem 公共客户端
 const client = createPublicClient({
   chain: {
@@ -59,6 +62,27 @@ function must(key: string): string {
   const val = process.env[key];
   if (!val) throw new Error(`Missing env ${key}`);
   return val;
+}
+
+/**
+ * 验证 RPC URL 配置
+ */
+function validateRpcUrl(url: string): void {
+  // 检查是否包含常见的占位符
+  const placeholders = ['xxxxxxxxxxxxx', 'your-rpc-url', 'YOUR_API_KEY', 'xxx', 'placeholder'];
+  const hasPlaceholder = placeholders.some((placeholder) => url.includes(placeholder));
+  
+  if (hasPlaceholder) {
+    console.error('❌ RPC URL 配置错误：检测到占位符');
+    console.error(`   当前 RPC URL: ${url}`);
+    console.error('');
+    console.error('💡 解决方案：');
+    console.error('   1. 在 apps/indexer/.env 文件中设置正确的 RPC_HTTP');
+    console.error('   2. 对于 Alchemy，格式应为: https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY');
+    console.error('   3. 确保 API key 是有效的，不是占位符');
+    console.error('');
+    throw new Error('RPC URL 包含占位符，请配置正确的 RPC_HTTP 环境变量');
+  }
 }
 
 /**
@@ -229,12 +253,33 @@ async function runIndexer(): Promise<void> {
   console.log(`📋 Configuration:`);
   console.log(`   Factory: ${FACTORY}`);
   console.log(`   Chain ID: ${CHAIN_ID}`);
-  console.log(`   RPC: ${RPC_HTTP}`);
+  // 隐藏 RPC URL 中的敏感信息（API key）
+  const maskedRpc = RPC_HTTP.replace(/(\/v2\/)([^/]+)/, '$1***');
+  console.log(`   RPC: ${maskedRpc}`);
   console.log(`   Block Batch: ${BLOCK_BATCH}`);
   console.log(`   RPC Delay: ${RPC_DELAY_MS}ms`);
   console.log(`   Max Retries: ${MAX_RETRIES}`);
 
-  const head = await client.getBlockNumber();
+  // 测试 RPC 连接
+  console.log('🔌 Testing RPC connection...');
+  let head: bigint;
+  try {
+    head = await client.getBlockNumber();
+    console.log(`✅ RPC connection successful. Current block: ${head}`);
+  } catch (error) {
+    console.error('❌ RPC connection failed:', error);
+    if (error instanceof Error) {
+      if (error.message.includes('HTTP request failed') || error.message.includes('Unexpected token')) {
+        console.error('');
+        console.error('🔍 这通常是认证错误，请检查：');
+        console.error('   1. RPC_HTTP 中的 API key 是否正确');
+        console.error('   2. API key 是否已过期或被撤销');
+        console.error('   3. RPC 服务提供商是否正常服务');
+        console.error('');
+      }
+    }
+    throw error;
+  }
   let from = (await getCheckpoint()) ?? DEPLOY_BLOCK;
 
   // 如果 checkpoint 存在，从下一个区块开始
@@ -311,6 +356,32 @@ async function main(): Promise<void> {
     console.log(`⏰ Scheduled updates every ${UPDATE_INTERVAL_MS / 1000}s`);
   } catch (error) {
     console.error('❌ Fatal error:', error);
+    
+    // 改进错误信息显示
+    if (error instanceof Error) {
+      // 检查是否是 HTTP 请求错误
+      if (error.message.includes('HTTP request failed') || error.message.includes('Unexpected token')) {
+        console.error('');
+        console.error('🔍 错误分析：');
+        console.error('   RPC 请求失败，可能是以下原因：');
+        console.error('   1. RPC URL 中的 API key 无效或已过期');
+        console.error('   2. RPC 服务提供商返回了认证错误');
+        console.error('   3. 网络连接问题');
+        console.error('');
+        console.error('💡 解决方案：');
+        console.error('   1. 检查 apps/indexer/.env 文件中的 RPC_HTTP 配置');
+        console.error('   2. 确认 API key 是否正确且有效');
+        console.error('   3. 如果是 Alchemy，请访问 https://dashboard.alchemy.com/ 获取新的 API key');
+        console.error('   4. 检查网络连接是否正常');
+        console.error('');
+      }
+      
+      // 检查是否是 RPC URL 验证错误
+      if (error.message.includes('RPC URL 包含占位符')) {
+        // 验证错误已经在 validateRpcUrl 中显示了详细信息
+      }
+    }
+    
     process.exit(1);
   }
 }
