@@ -6,7 +6,12 @@
     "outDir": "dist",
     "strict": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node",
+      "pg"
+    ]
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }
