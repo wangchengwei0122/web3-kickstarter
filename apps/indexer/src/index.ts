@@ -7,50 +7,34 @@ import { eq } from 'drizzle-orm';
 import { withRetry, delay, formatBigInt, formatAddress, formatBlockNumber } from './utils.js';
 import { CampaignStatus, type CampaignSummary } from './types.js';
 
-/**
- * -----------------------------
- *  1. 环境变量与配置
- * -----------------------------
- */
-
+/* --------------------------
+ *  ENV
+ * -------------------------- */
 const RPC_HTTP = must('RPC_HTTP');
 const CHAIN_ID = Number(must('CHAIN_ID'));
 const FACTORY = must('FACTORY').toLowerCase() as Address;
 const DEPLOY_BLOCK = BigInt(must('DEPLOY_BLOCK'));
 
-const BLOCK_BATCH = BigInt(process.env.BLOCK_BATCH ?? '10');
-const RPC_DELAY_MS = Number(process.env.RPC_DELAY_MS ?? '100');
-const MAX_RETRIES = Number(process.env.MAX_RETRIES ?? '3');
-const RETRY_DELAY_MS = Number(process.env.RETRY_DELAY_MS ?? '1000');
-const UPDATE_INTERVAL_MS = Number(process.env.UPDATE_INTERVAL_MS ?? '60000');
+const BLOCK_BATCH = 50n; // 批量扫描大小（大一点更省 RPC）
+const RPC_DELAY_MS = 200; // 请求间隔（保险）
+const UPDATE_INTERVAL_MS = 30000; // 30 秒检测 active 状态
 
-validateRpcUrl(RPC_HTTP);
-
-/**
- * -----------------------------
- *  2. viem 公共客户端
- * -----------------------------
- */
-
+/* --------------------------
+ *  Client
+ * -------------------------- */
 const client = createPublicClient({
   chain: {
     id: CHAIN_ID,
     name: `chain-${CHAIN_ID}`,
-    rpcUrls: {
-      default: { http: [RPC_HTTP] },
-      public: { http: [RPC_HTTP] },
-    },
     nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+    rpcUrls: { default: { http: [RPC_HTTP] }, public: { http: [RPC_HTTP] } },
   },
   transport: http(RPC_HTTP),
 });
 
-/**
- * -----------------------------
- *  3. ABI 与事件
- * -----------------------------
- */
-
+/* --------------------------
+ *  ABI
+ * -------------------------- */
 const CAMPAIGN_ABI = [
   {
     name: 'getSummary',
@@ -73,91 +57,65 @@ const campaignCreatedEvent = parseAbiItem(
   'event CampaignCreated(address indexed campaign, address indexed creator, uint256 indexed id)'
 );
 
-/**
- * -----------------------------
- *  4. 工具函数
- * -----------------------------
- */
-
+/* --------------------------
+ *  UTIL
+ * -------------------------- */
 function must(key: string): string {
   const val = process.env[key];
   if (!val) throw new Error(`Missing env ${key}`);
   return val;
 }
 
-function validateRpcUrl(url: string): void {
-  const placeholders = ['xxxx', 'your-rpc', 'YOUR_API_KEY', 'placeholder'];
-  if (placeholders.some((p) => url.includes(p))) {
-    console.error('❌ RPC_HTTP 设置错误，请填写真实 RPC URL');
-    throw new Error('Invalid RPC_HTTP');
-  }
-}
-
-/**
- * -----------------------------
- *  5. 数据库操作
- * -----------------------------
- */
-
 async function getCheckpoint(): Promise<bigint | null> {
-  const id = `factory:${FACTORY}`;
   const row = await db.query.checkpoints.findFirst({
-    where: eq(checkpoints.id, id),
+    where: eq(checkpoints.id, `factory:${FACTORY}`),
   });
   return row?.block ? BigInt(row.block) : null;
 }
 
 async function setCheckpoint(block: bigint): Promise<void> {
-  const id = `factory:${FACTORY}`;
   await db
     .insert(checkpoints)
-    .values({ id, block: Number(block) })
+    .values({ id: `factory:${FACTORY}`, block: Number(block) })
     .onConflictDoUpdate({
       target: checkpoints.id,
       set: { block: Number(block) },
     });
 }
 
-/**
- * -----------------------------
- *  6. 读取合约
- * -----------------------------
- */
-
-async function fetchCampaignSummary(campaignAddress: Address): Promise<CampaignSummary> {
-  const result = await client.readContract({
-    address: campaignAddress,
+/* --------------------------
+ *  Fetch full summary
+ * -------------------------- */
+async function fetchCampaignSummary(addr: Address): Promise<CampaignSummary> {
+  const res = await client.readContract({
+    address: addr,
     abi: CAMPAIGN_ABI,
     functionName: 'getSummary',
   });
 
   return {
-    creator: result[0] as Address,
-    goal: result[1] as bigint,
-    deadline: result[2] as bigint,
-    status: result[3] as CampaignStatus,
-    totalPledged: result[4] as bigint,
-    metadataURI: result[5] as string,
-    factory: result[6] as Address,
+    creator: res[0],
+    goal: res[1],
+    deadline: res[2],
+    status: res[3],
+    totalPledged: res[4],
+    metadataURI: res[5],
+    factory: res[6],
   };
 }
 
-async function processNewCampaign(campaign: Address, creator: Address, block: bigint) {
-  console.log(`📦 New campaign ${campaign}`);
+/* --------------------------
+ *  Process CampaignCreated
+ * -------------------------- */
+async function processNewCampaign(addr: Address, creator: Address, block: bigint) {
+  console.log(`📦 New campaign ${addr} at block ${block}`);
 
-  const summary = await withRetry(
-    () => fetchCampaignSummary(campaign),
-    MAX_RETRIES,
-    RETRY_DELAY_MS,
-    (err, attempt) => {
-      console.warn(`⚠️ Retry ${attempt}/${MAX_RETRIES}: ${err.message}`);
-    }
-  );
+  const summary = await withRetry(() => fetchCampaignSummary(addr), 3, 1500);
 
   await db
     .insert(campaigns)
     .values({
-      address: formatAddress(campaign),
+      address: formatAddress(addr),
       creator: formatAddress(summary.creator),
       goal: formatBigInt(summary.goal),
       deadline: Number(summary.deadline),
@@ -165,151 +123,101 @@ async function processNewCampaign(campaign: Address, creator: Address, block: bi
       totalPledged: formatBigInt(summary.totalPledged),
       metadataURI: summary.metadataURI,
       createdAt: new Date(),
-      createdBlock: formatBlockNumber(block),
+      createdBlock: Number(block),
     })
     .onConflictDoUpdate({
       target: campaigns.address,
       set: {
-        creator: formatAddress(summary.creator),
         goal: formatBigInt(summary.goal),
-        deadline: Number(summary.deadline),
         status: summary.status,
         totalPledged: formatBigInt(summary.totalPledged),
+        deadline: Number(summary.deadline),
         metadataURI: summary.metadataURI,
       },
     });
 }
 
-/**
- * -----------------------------
- *  7. 区块扫描（增量）
- * -----------------------------
- */
-
-async function runIndexer(latestBlock?: bigint): Promise<void> {
-  const head = latestBlock ?? (await client.getBlockNumber());
+/* --------------------------
+ *  INDEX BLOCKS
+ * -------------------------- */
+async function indexBlocks(headBlock: bigint) {
   let from = (await getCheckpoint()) ?? DEPLOY_BLOCK;
 
   if (from > DEPLOY_BLOCK) from++;
 
-  console.log(`🔎 Scan ${from} → ${head}`);
+  while (from <= headBlock) {
+    const to = from + BLOCK_BATCH - 1n > headBlock ? headBlock : from + BLOCK_BATCH - 1n;
 
-  while (from <= head) {
-    const to = from + BLOCK_BATCH - 1n > head ? head : from + BLOCK_BATCH - 1n;
+    const logs = await client.getLogs({
+      address: FACTORY,
+      event: campaignCreatedEvent,
+      fromBlock: from,
+      toBlock: to,
+    });
 
-    try {
-      const logs = await withRetry(
-        () =>
-          client.getLogs({
-            address: FACTORY,
-            event: campaignCreatedEvent,
-            fromBlock: from,
-            toBlock: to,
-          }),
-        MAX_RETRIES,
-        RETRY_DELAY_MS
-      );
-
-      for (const log of logs) {
-        const { campaign, creator } = log.args as {
-          campaign: Address;
-          creator: Address;
-        };
-        await processNewCampaign(campaign, creator, log.blockNumber ?? 0n);
-        await delay(RPC_DELAY_MS);
-      }
-
-      await setCheckpoint(to);
-
-      console.log(`✅ Indexed ${from} → ${to} (${logs.length} new)`);
-
-      from = to + 1n;
+    for (const log of logs) {
+      const { campaign, creator } = log.args as any;
+      await processNewCampaign(campaign, creator, log.blockNumber);
       await delay(RPC_DELAY_MS);
-    } catch (error) {
-      console.error(`❌ Error for ${from} → ${to}:`, error);
-      from = to + 1n;
     }
+
+    await setCheckpoint(to);
+    console.log(`🟢 Indexed ${from} → ${to} (${logs.length} events)`);
+
+    from = to + 1n;
   }
 }
 
-/**
- * -----------------------------
- *  8. Active campaign 定期更新
- * -----------------------------
- */
-
-async function updateExistingCampaigns(): Promise<void> {
-  console.log(`🔄 Updating active campaigns...`);
-
+/* --------------------------
+ *  Update active campaigns
+ * -------------------------- */
+async function updateActive() {
   const active = await db.query.campaigns.findMany({
     where: eq(campaigns.status, CampaignStatus.Active),
   });
 
-  for (const campaign of active) {
-    try {
-      const summary = await fetchCampaignSummary(campaign.address as Address);
+  for (const c of active) {
+    const summary = await fetchCampaignSummary(c.address as Address);
 
-      await db
-        .update(campaigns)
-        .set({
-          status: summary.status,
-          totalPledged: formatBigInt(summary.totalPledged),
-          deadline: Number(summary.deadline),
-          metadataURI: summary.metadataURI,
-        })
-        .where(eq(campaigns.address, campaign.address));
-    } catch (err) {
-      console.error(`❌ Update error for ${campaign.address}:`, err);
-    }
+    await db
+      .update(campaigns)
+      .set({
+        status: summary.status,
+        totalPledged: formatBigInt(summary.totalPledged),
+        deadline: Number(summary.deadline),
+        metadataURI: summary.metadataURI,
+      })
+      .where(eq(campaigns.address, c.address));
 
     await delay(RPC_DELAY_MS);
   }
-
-  console.log('✅ Active campaigns updated');
 }
 
-/**
- * -----------------------------
- *  9. 主函数：首次同步 + 实时监听
- * -----------------------------
- */
-
+/* --------------------------
+ *  Main
+ * -------------------------- */
 async function main() {
   console.log('🚀 Indexer started');
   console.log(`📌 Factory: ${FACTORY}`);
   console.log(`📌 RPC: ${RPC_HTTP}`);
 
-  let processing = false;
+  // Full sync once
+  const head = await client.getBlockNumber();
+  await indexBlocks(head);
 
-  // 🟦 首次 full sync
-  await runIndexer();
-
-  // 🟩 实时监听新区块
+  // Watch new blocks
   watchBlockNumber(client, {
-    onBlockNumber: async (blockNumber) => {
-      if (processing) return;
-      processing = true;
-
-      try {
-        await runIndexer(blockNumber);
-      } finally {
-        processing = false;
-      }
+    onBlockNumber: async (block) => {
+      await indexBlocks(block);
     },
-    onError: (err) => console.error('❌ Block watcher error:', err),
+    onError(err) {
+      console.error('❌ Watch error:', err);
+    },
   });
 
-  // 🟨 每分钟更新 active campaigns
-  setInterval(updateExistingCampaigns, UPDATE_INTERVAL_MS);
-
-  console.log(`⏰ Active campaigns update every ${UPDATE_INTERVAL_MS / 1000}s`);
+  // update active campaigns
+  setInterval(updateActive, UPDATE_INTERVAL_MS);
 }
-
-/**
- * -----------------------------
- * 10. 启动
- * -----------------------------
- */
 
 main().catch((e) => {
   console.error('❌ Fatal:', e);

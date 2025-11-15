@@ -1,0 +1,11 @@
+app = "fundr-indexer"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[processes]
+  indexer = "node dist/index.js"
+
+[vm]
+  size = "shared-cpu-1x"
