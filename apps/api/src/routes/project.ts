@@ -21,7 +21,18 @@ export async function projectRoutes(fastify: FastifyInstance) {
         const project = await getProjectByAddress(address);
         const status = getProjectStatus(project);
 
-        const response: SuccessResponse<typeof project & { status: string }> = {
+        // const response: SuccessResponse<typeof project & { status: string }> = {
+        //   success: true,
+        //   data: {
+        //     ...project,
+        //     status,
+        //   },
+        // };
+        type ProjectResponse = Omit<typeof project, 'status'> & {
+          status: ReturnType<typeof getProjectStatus>;
+        };
+
+        const response: SuccessResponse<ProjectResponse> = {
           success: true,
           data: {
             ...project,
@@ -36,4 +47,3 @@ export async function projectRoutes(fastify: FastifyInstance) {
     }
   );
 }
-

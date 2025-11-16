@@ -168,8 +168,9 @@ pnpm start
 
 ## 部署
 
-docker buildx build \
- --platform linux/amd64,linux/arm64 \
- -t xxxx/fundr-indexer:latest \
- --push \
- -f apps/indexer/Dockerfile .
+- docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t wangchengwei123/fundr-indexer:latest \
+  --push \
+  -f apps/indexer/Dockerfile .
+- fly deploy --image wangchengwei123/fundr-indexer:latest

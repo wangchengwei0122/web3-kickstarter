@@ -78,17 +78,10 @@ export async function getProjects(query: ProjectQuery = {}) {
   }
 
   // 查询项目列表
-  const results = await db
-    .select()
-    .from(campaigns)
-    .orderBy(orderBy)
-    .limit(limit)
-    .offset(offset);
+  const results = await db.select().from(campaigns).orderBy(orderBy).limit(limit).offset(offset);
 
   // 查询总数
-  const totalResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(campaigns);
+  const totalResult = await db.select({ count: sql<number>`count(*)` }).from(campaigns);
 
   const total = Number(totalResult[0]?.count ?? 0);
 
@@ -152,7 +145,9 @@ export async function getProjectsByCreator(creatorAddress: string) {
 /**
  * 获取项目的当前状态（active/failed/succeeded）
  */
-export function getProjectStatus(project: Project): 'active' | 'failed' | 'succeeded' | 'cancelled' {
+export function getProjectStatus(
+  project: Project
+): 'active' | 'failed' | 'succeeded' | 'cancelled' {
   // status: 0=Active, 1=Successful, 2=Failed, 3=Cancelled
   switch (project.status) {
     case 0:
@@ -172,4 +167,3 @@ export function getProjectStatus(project: Project): 'active' | 'failed' | 'succe
       return 'active';
   }
 }
-

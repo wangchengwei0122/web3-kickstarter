@@ -42,5 +42,10 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/autoload": "^6.3.1",
+    "@fastify/sensible": "^6.0.3",
+    "fastify-plugin": "^5.1.0"
+  }
 }
