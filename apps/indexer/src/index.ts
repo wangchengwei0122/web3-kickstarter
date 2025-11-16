@@ -1,34 +1,45 @@
-import { createPublicClient, http, parseAbiItem, type Address } from 'viem';
-import { watchBlockNumber } from 'viem/actions';
+import { createPublicClient, http, parseAbiItem, webSocket, type Address, type Log } from 'viem';
 import { db } from './db/client.js';
 import { campaigns, checkpoints } from '@packages/db';
 import { eq } from 'drizzle-orm';
-import { withRetry, delay, formatBigInt, formatAddress, formatBlockNumber } from './utils.js';
+import { withRetry, delay, formatBigInt, formatAddress } from './utils.js';
 import { CampaignStatus, type CampaignSummary } from './types.js';
 
 /* --------------------------
- *  ENV
+ *  ENV & CONSTANTS
  * -------------------------- */
 const RPC_HTTP = must('RPC_HTTP');
+const RPC_WSS = must('RPC_WSS');
 const CHAIN_ID = Number(must('CHAIN_ID'));
 const FACTORY = must('FACTORY').toLowerCase() as Address;
 const DEPLOY_BLOCK = BigInt(must('DEPLOY_BLOCK'));
 
-const BLOCK_BATCH = 50n; // 批量扫描大小（大一点更省 RPC）
-const RPC_DELAY_MS = 200; // 请求间隔（保险）
-const UPDATE_INTERVAL_MS = 30000; // 30 秒检测 active 状态
+const BLOCK_BATCH = BigInt(process.env.BLOCK_BATCH ?? '500');
+const RPC_DELAY_MS = Number(process.env.RPC_DELAY_MS ?? 300);
+const UPDATE_INTERVAL_MS = Number(process.env.UPDATE_INTERVAL_MS ?? 30_000);
+const RECONNECT_BACKOFF = [1_000, 2_000, 5_000, 10_000] as const;
 
 /* --------------------------
- *  Client
+ *  CLIENTS
  * -------------------------- */
-const client = createPublicClient({
-  chain: {
-    id: CHAIN_ID,
-    name: `chain-${CHAIN_ID}`,
-    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-    rpcUrls: { default: { http: [RPC_HTTP] }, public: { http: [RPC_HTTP] } },
+const chain = {
+  id: CHAIN_ID,
+  name: `chain-${CHAIN_ID}`,
+  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  rpcUrls: {
+    default: { http: [RPC_HTTP], webSocket: [RPC_WSS] },
+    public: { http: [RPC_HTTP], webSocket: [RPC_WSS] },
   },
+} as const;
+
+const httpClient = createPublicClient({
+  chain,
   transport: http(RPC_HTTP),
+});
+
+const wsClient = createPublicClient({
+  chain,
+  transport: webSocket(RPC_WSS),
 });
 
 /* --------------------------
@@ -56,23 +67,30 @@ const campaignCreatedEvent = parseAbiItem(
   'event CampaignCreated(address indexed campaign, address indexed creator, uint256 indexed id)'
 );
 
-/* --------------------------
- *  UTIL
- * -------------------------- */
-function must(key: string): string {
-  const val = process.env[key];
-  if (!val) throw new Error(`Missing env ${key}`);
-  return val;
-}
+type CampaignCreatedLog = Log & {
+  args: {
+    campaign: Address;
+    creator: Address;
+    id: bigint;
+  };
+};
 
-async function getCheckpoint(): Promise<bigint | null> {
+/* --------------------------
+ *  CHECKPOINT STATE
+ * -------------------------- */
+let latestCheckpoint: bigint = 0n;
+
+async function readCheckpoint(): Promise<bigint | null> {
   const row = await db.query.checkpoints.findFirst({
     where: eq(checkpoints.id, `factory:${FACTORY}`),
   });
-  return row?.block ? BigInt(row.block) : null;
+  if (!row?.block) return null;
+  latestCheckpoint = BigInt(row.block);
+  return latestCheckpoint;
 }
 
-async function setCheckpoint(block: bigint): Promise<void> {
+async function writeCheckpoint(block: bigint): Promise<void> {
+  if (block <= latestCheckpoint) return;
   await db
     .insert(checkpoints)
     .values({ id: `factory:${FACTORY}`, block: Number(block) })
@@ -80,37 +98,141 @@ async function setCheckpoint(block: bigint): Promise<void> {
       target: checkpoints.id,
       set: { block: Number(block) },
     });
+  latestCheckpoint = block;
+  console.log(`✅ Checkpoint advanced → ${block}`);
 }
 
 /* --------------------------
- *  Fetch full summary
+ *  CATCH-UP & FULL SYNC
  * -------------------------- */
+async function syncRange(fromBlock: bigint, toBlock: bigint): Promise<void> {
+  if (fromBlock > toBlock) return;
+
+  let cursor = fromBlock;
+  while (cursor <= toBlock) {
+    const batchEnd = cursor + BLOCK_BATCH - 1n > toBlock ? toBlock : cursor + BLOCK_BATCH - 1n;
+    console.log(`⏳ Syncing ${cursor} → ${batchEnd}`);
+
+    const logs = await httpClient.getLogs({
+      address: FACTORY,
+      event: campaignCreatedEvent,
+      fromBlock: cursor,
+      toBlock: batchEnd,
+    });
+
+    await handleCampaignLogs(logs as CampaignCreatedLog[]);
+
+    await writeCheckpoint(batchEnd);
+    cursor = batchEnd + 1n;
+    await delay(RPC_DELAY_MS);
+  }
+}
+
+async function fullSyncIfNeeded(): Promise<void> {
+  if (latestCheckpoint > 0n) return;
+  console.log('🧱 Running full sync...');
+  const head = await httpClient.getBlockNumber({ blockTag: 'latest' });
+  await syncRange(DEPLOY_BLOCK, head);
+}
+
+async function catchUpFromCheckpoint(): Promise<void> {
+  const head = await httpClient.getBlockNumber({ blockTag: 'latest' });
+  const nextBlock = latestCheckpoint === 0n ? DEPLOY_BLOCK : latestCheckpoint + 1n;
+  if (head < nextBlock) return;
+  await syncRange(nextBlock, head);
+}
+
+/* --------------------------
+ *  CAMPAIGN PROCESSING
+ * -------------------------- */
+async function handleCampaignLogs(logs: CampaignCreatedLog[]): Promise<void> {
+  if (!logs.length) return;
+  const addresses = logs.map((log) => log.args.campaign);
+  const summaries = await fetchCampaignSummaries(addresses);
+
+  for (let i = 0; i < logs.length; i++) {
+    const log = logs[i];
+    const summary = summaries[i];
+    if (!summary) {
+      console.warn(`⚠️ Skip campaign ${log.args.campaign}, summary missing`);
+      continue;
+    }
+    await upsertCampaign(log.args.campaign, summary, log.blockNumber ?? latestCheckpoint);
+  }
+
+  const highestBlock = logs.reduce(
+    (max, log) => (log.blockNumber && log.blockNumber > max ? log.blockNumber : max),
+    latestCheckpoint
+  );
+  if (highestBlock > latestCheckpoint) {
+    await writeCheckpoint(highestBlock);
+  }
+}
+
+async function fetchCampaignSummaries(addresses: Address[]): Promise<Array<CampaignSummary | null>> {
+  if (!addresses.length) return [];
+  const responses = await withRetry(
+    () =>
+      wsClient.multicall({
+        allowFailure: true,
+        contracts: addresses.map((address) => ({
+          address,
+          abi: CAMPAIGN_ABI,
+          functionName: 'getSummary',
+        })),
+      }),
+    3,
+    1_000
+  );
+
+  return Promise.all(
+    responses.map(async (response, idx) => {
+      if (response.status === 'success') {
+        return normalizeSummary(response.result as readonly unknown[]);
+      }
+      console.warn(`⚠️ Multicall failed for ${addresses[idx]}, fallback to single read`, response.error);
+      try {
+        return await withRetry(() => fetchCampaignSummary(addresses[idx]), 2, 1_000);
+      } catch (error) {
+        console.error(`❌ Failed to fetch summary for ${addresses[idx]}`, error);
+        return null;
+      }
+    })
+  );
+}
+
+function normalizeSummary(result: readonly unknown[]): CampaignSummary {
+  const [creator, goal, deadline, status, totalPledged, metadataURI, factory] = result as [
+    Address,
+    bigint,
+    bigint,
+    number,
+    bigint,
+    string,
+    Address
+  ];
+  return {
+    creator,
+    goal,
+    deadline,
+    status: status as CampaignStatus,
+    totalPledged,
+    metadataURI,
+    factory,
+  };
+}
+
 async function fetchCampaignSummary(addr: Address): Promise<CampaignSummary> {
-  const res = await client.readContract({
+  const res = await wsClient.readContract({
     address: addr,
     abi: CAMPAIGN_ABI,
     functionName: 'getSummary',
   });
-
-  return {
-    creator: res[0],
-    goal: res[1],
-    deadline: res[2],
-    status: res[3],
-    totalPledged: res[4],
-    metadataURI: res[5],
-    factory: res[6],
-  };
+  return normalizeSummary(res);
 }
 
-/* --------------------------
- *  Process CampaignCreated
- * -------------------------- */
-async function processNewCampaign(addr: Address, creator: Address, block: bigint) {
-  console.log(`📦 New campaign ${addr} at block ${block}`);
-
-  const summary = await withRetry(() => fetchCampaignSummary(addr), 3, 1500);
-
+async function upsertCampaign(addr: Address, summary: CampaignSummary, block: bigint): Promise<void> {
+  console.log(`📦 Upsert campaign ${addr} @ block ${block}`);
   await db
     .insert(campaigns)
     .values({
@@ -137,47 +259,103 @@ async function processNewCampaign(addr: Address, creator: Address, block: bigint
 }
 
 /* --------------------------
- *  INDEX BLOCKS
+ *  WATCHERS & RECONNECT
  * -------------------------- */
-async function indexBlocks(headBlock: bigint) {
-  let from = (await getCheckpoint()) ?? DEPLOY_BLOCK;
+let watcherCleanups: Array<() => void> = [];
+let reconnectTimer: NodeJS.Timeout | null = null;
+let reconnectAttempts = 0;
 
-  if (from > DEPLOY_BLOCK) from++;
+function registerWatcher(cleanup: () => void): void {
+  watcherCleanups.push(cleanup);
+}
 
-  while (from <= headBlock) {
-    const to = from + BLOCK_BATCH - 1n > headBlock ? headBlock : from + BLOCK_BATCH - 1n;
+function stopWatchers(): void {
+  for (const cleanup of watcherCleanups) {
+    try {
+      cleanup();
+    } catch (error) {
+      console.error('⚠️ Failed to stop watcher', error);
+    }
+  }
+  watcherCleanups = [];
+}
 
-    const logs = await client.getLogs({
+async function startWatchers(): Promise<void> {
+  stopWatchers();
+  reconnectAttempts = 0;
+
+  registerWatcher(
+    wsClient.watchBlocks({
+      blockTag: 'finalized',
+      onBlock: async (block) => {
+        console.log(`🔔 Finalized block ${block.number}`);
+      },
+      onError: handleWatchError,
+    })
+  );
+
+  registerWatcher(
+    wsClient.watchContractEvent({
       address: FACTORY,
       event: campaignCreatedEvent,
-      fromBlock: from,
-      toBlock: to,
-    });
+      poll: false,
+      onLogs: async (logs) => {
+        await handleCampaignLogs(logs as CampaignCreatedLog[]);
+      },
+      onError: handleWatchError,
+      onReorg: async (logs) => {
+        const log = (logs as CampaignCreatedLog[] | undefined)?.[0];
+        const fallback = log?.blockNumber ?? latestCheckpoint;
+        const reorgBlock = fallback > DEPLOY_BLOCK ? fallback : DEPLOY_BLOCK;
+        console.warn(`⚠️ Reorg detected near block ${reorgBlock}. Resyncing...`);
+        await catchUpFrom(reorgBlock);
+      },
+    })
+  );
 
-    for (const log of logs) {
-      const { campaign, creator } = log.args as any;
-      await processNewCampaign(campaign, creator, log.blockNumber);
-      await delay(RPC_DELAY_MS);
+  console.log('👀 Live watchers started');
+}
+
+function handleWatchError(error: unknown): void {
+  console.error('❌ Watcher error', error);
+  stopWatchers();
+  queueReconnect();
+}
+
+function queueReconnect(): void {
+  if (reconnectTimer) return;
+  const delayMs = RECONNECT_BACKOFF[Math.min(reconnectAttempts, RECONNECT_BACKOFF.length - 1)];
+  reconnectAttempts = Math.min(reconnectAttempts + 1, RECONNECT_BACKOFF.length - 1);
+  console.log(`🔁 Reconnecting WebSocket in ${delayMs}ms`);
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null;
+    try {
+      await catchUpFromCheckpoint();
+      await startWatchers();
+    } catch (error) {
+      console.error('❌ Failed to restart watchers', error);
+      queueReconnect();
     }
+  }, delayMs);
+}
 
-    await setCheckpoint(to);
-    console.log(`🟢 Indexed ${from} → ${to} (${logs.length} events)`);
-
-    from = to + 1n;
-  }
+async function catchUpFrom(startBlock: bigint): Promise<void> {
+  const head = await httpClient.getBlockNumber({ blockTag: 'latest' });
+  const from = startBlock < DEPLOY_BLOCK ? DEPLOY_BLOCK : startBlock;
+  if (head < from) return;
+  await syncRange(from, head);
 }
 
 /* --------------------------
- *  Update active campaigns
+ *  ACTIVE CAMPAIGN UPDATES
  * -------------------------- */
-async function updateActive() {
+async function updateActiveCampaigns(): Promise<void> {
   const active = await db.query.campaigns.findMany({
     where: eq(campaigns.status, CampaignStatus.Active),
   });
 
   for (const c of active) {
-    const summary = await fetchCampaignSummary(c.address as Address);
-
+    const summary = await withRetry(() => fetchCampaignSummary(c.address as Address), 2, 1_000);
     await db
       .update(campaigns)
       .set({
@@ -187,38 +365,39 @@ async function updateActive() {
         metadataURI: summary.metadataURI,
       })
       .where(eq(campaigns.address, c.address));
-
     await delay(RPC_DELAY_MS);
   }
 }
 
 /* --------------------------
- *  Main
+ *  UTILITIES
  * -------------------------- */
-async function main() {
-  console.log('🚀 Indexer started');
-  console.log(`📌 Factory: ${FACTORY}`);
-  console.log(`📌 RPC: ${RPC_HTTP}`);
-
-  // Full sync once
-  const head = await client.getBlockNumber();
-  await indexBlocks(head);
-
-  // Watch new blocks
-  watchBlockNumber(client, {
-    onBlockNumber: async (block) => {
-      await indexBlocks(block);
-    },
-    onError(err) {
-      console.error('❌ Watch error:', err);
-    },
-  });
-
-  // update active campaigns
-  setInterval(updateActive, UPDATE_INTERVAL_MS);
+function must(key: string): string {
+  const value = process.env[key];
+  if (!value) throw new Error(`Missing env ${key}`);
+  return value;
 }
 
-main().catch((e) => {
-  console.error('❌ Fatal:', e);
+/* --------------------------
+ *  MAIN
+ * -------------------------- */
+async function main() {
+  console.log('🚀 Indexer booting');
+  console.log(`📌 Factory: ${FACTORY}`);
+  console.log(`📡 HTTP: ${RPC_HTTP}`);
+  console.log(`📡 WSS: ${RPC_WSS}`);
+
+  await readCheckpoint();
+  await fullSyncIfNeeded();
+  await catchUpFromCheckpoint();
+  await startWatchers();
+
+  setInterval(() => {
+    updateActiveCampaigns().catch((error) => console.error('❌ updateActive error', error));
+  }, UPDATE_INTERVAL_MS);
+}
+
+main().catch((error) => {
+  console.error('❌ Fatal error', error);
   process.exit(1);
 });
