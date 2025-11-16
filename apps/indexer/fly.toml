@@ -1,11 +1,19 @@
 app = "fundr-indexer"
 primary_region = "sin"
 
+# ---------- Build 配置 ----------
 [build]
   dockerfile = "Dockerfile"
 
+# ---------- 进程 ----------
 [processes]
   indexer = "node dist/index.js"
 
+# ---------- VM ----------
 [vm]
   size = "shared-cpu-1x"
+  memory = "512mb"
+
+# ---------- 自动重启（必须用数组形式） ----------
+[[restart]]
+  policy = "always"

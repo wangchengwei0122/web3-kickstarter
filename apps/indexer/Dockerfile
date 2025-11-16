@@ -1,40 +1,32 @@
-# ================================
-# 1) Build Stage（使用 Fly 节点）
-# ================================
-FROM flyio/node:20 AS builder
-
+# ---------- Build Stage ----------
+FROM node:20-slim AS builder
 WORKDIR /app
 
-# 安装 pnpm
+ENV CI=true
 RUN npm install -g pnpm
 
-# monorepo 文件
-COPY ../../pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY ../../pnpm-lock.yaml ./pnpm-lock.yaml
-COPY ../../apps ./apps
-COPY ../../packages ./packages
+# 整个 monorepo 复制进去
+COPY . .
 
-# 安装依赖
+# 只安装 indexer 的依赖（包括 workspace）
 RUN pnpm install --filter @apps/indexer...
 
-# 构建产物
+# 构建 indexer
 RUN pnpm --filter @apps/indexer build
 
-
-# ================================
-# 2) Runtime Stage（使用官方 node）
-# ================================
-FROM node:20 AS runner
+# ---------- Runtime Stage ----------
+FROM node:20-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NODE_TLS_REJECT_UNAUTHORIZED=0
 
-# 复制产物
+# 复制 indexer 构建产物
 COPY --from=builder /app/apps/indexer/dist ./dist
+
+# 复制 indexer 的 package.json 和已经装好的 node_modules
 COPY --from=builder /app/apps/indexer/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
 
-# 安装生产依赖
-RUN npm install --omit=dev
-
+# 直接运行，无需 install！
 CMD ["node", "dist/index.js"]

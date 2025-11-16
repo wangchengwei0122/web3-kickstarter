@@ -106,9 +106,6 @@ importers:
       better-sqlite3:
         specifier: ^12.4.1
         version: 12.4.1
-      dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
       drizzle-orm:
         specifier: ^0.44.7
         version: 0.44.7(@cloudflare/workers-types@4.20251107.0)(@types/pg@8.15.6)(better-sqlite3@12.4.1)(pg@8.16.3)

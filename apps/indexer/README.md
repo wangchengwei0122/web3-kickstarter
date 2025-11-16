@@ -40,26 +40,26 @@ DATABASE_SSL=true                          # 启用 SSL 连接
 
 ### campaigns 表
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | serial | 主键 |
-| address | text (unique) | Campaign 合约地址 |
-| creator | text | 创建者地址 |
-| goal | text | 目标金额（wei） |
-| deadline | bigint | 截止时间（Unix 时间戳） |
-| status | integer | 状态（0: Active, 1: Successful, 2: Failed, 3: Cancelled） |
-| total_pledged | text | 已筹金额（wei） |
-| metadata_uri | text | 元数据 URI |
-| created_at | timestamp | 创建时间 |
-| created_block | bigint | 创建区块号 |
+| 字段          | 类型          | 说明                                                      |
+| ------------- | ------------- | --------------------------------------------------------- |
+| id            | serial        | 主键                                                      |
+| address       | text (unique) | Campaign 合约地址                                         |
+| creator       | text          | 创建者地址                                                |
+| goal          | text          | 目标金额（wei）                                           |
+| deadline      | bigint        | 截止时间（Unix 时间戳）                                   |
+| status        | integer       | 状态（0: Active, 1: Successful, 2: Failed, 3: Cancelled） |
+| total_pledged | text          | 已筹金额（wei）                                           |
+| metadata_uri  | text          | 元数据 URI                                                |
+| created_at    | timestamp     | 创建时间                                                  |
+| created_block | bigint        | 创建区块号                                                |
 
 ### checkpoints 表
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | text (primary key) | Checkpoint ID（如 "factory:0x..."） |
-| block | bigint | 最后索引的区块号 |
-| updated_at | timestamp | 更新时间 |
+| 字段       | 类型               | 说明                                |
+| ---------- | ------------------ | ----------------------------------- |
+| id         | text (primary key) | Checkpoint ID（如 "factory:0x..."） |
+| block      | bigint             | 最后索引的区块号                    |
+| updated_at | timestamp          | 更新时间                            |
 
 ## 使用方法
 
@@ -135,6 +135,7 @@ pnpm start
 ### RPC 请求失败
 
 索引器会自动重试，最多重试 `MAX_RETRIES` 次。如果持续失败，请检查：
+
 - RPC 节点是否可用
 - 网络连接是否正常
 - RPC 请求频率是否过高（调整 `RPC_DELAY_MS`）
@@ -142,6 +143,7 @@ pnpm start
 ### 数据库连接失败
 
 确保：
+
 - `DATABASE_URL` 配置正确
 - 数据库服务正在运行
 - SSL 配置正确（Supabase 需要 SSL）
@@ -164,3 +166,10 @@ pnpm start
 - **PostgreSQL** - 数据库（Supabase）
 - **dotenv** - 环境变量管理
 
+## 部署
+
+docker buildx build \
+ --platform linux/amd64,linux/arm64 \
+ -t xxxx/fundr-indexer:latest \
+ --push \
+ -f apps/indexer/Dockerfile .

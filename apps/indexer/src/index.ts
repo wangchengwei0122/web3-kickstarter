@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { createPublicClient, http, parseAbiItem, type Address } from 'viem';
 import { watchBlockNumber } from 'viem/actions';
 import { db } from './db/client.js';
