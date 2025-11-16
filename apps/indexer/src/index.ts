@@ -1,7 +1,7 @@
 import { createPublicClient, http, parseAbiItem, type Address } from 'viem';
 import { watchBlockNumber } from 'viem/actions';
 import { db } from './db/client.js';
-import { campaigns, checkpoints } from './db/schema.js';
+import { campaigns, checkpoints } from '@packages/db';
 import { eq } from 'drizzle-orm';
 import { withRetry, delay, formatBigInt, formatAddress, formatBlockNumber } from './utils.js';
 import { CampaignStatus, type CampaignSummary } from './types.js';

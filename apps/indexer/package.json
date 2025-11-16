@@ -16,6 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "@packages/contracts": "workspace:*",
+    "@packages/db": "workspace:*",
     "better-sqlite3": "^12.4.1",
     "drizzle-orm": "^0.44.7",
     "pg": "^8.16.3",
