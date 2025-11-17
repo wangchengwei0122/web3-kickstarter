@@ -4,6 +4,7 @@ import { campaigns, checkpoints } from '@packages/db';
 import { eq } from 'drizzle-orm';
 import { withRetry, delay, formatBigInt, formatAddress } from './utils.js';
 import { CampaignStatus, type CampaignSummary } from './types.js';
+import { campaignAbi, campaignFactoryAbi } from '../abi';
 
 /* --------------------------
  *  ENV & CONSTANTS
@@ -41,27 +42,6 @@ const wsClient = createPublicClient({
   chain,
   transport: webSocket(RPC_WSS),
 });
-
-/* --------------------------
- *  ABI
- * -------------------------- */
-const CAMPAIGN_ABI = [
-  {
-    name: 'getSummary',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [
-      { name: '_creator', type: 'address' },
-      { name: '_goal', type: 'uint256' },
-      { name: '_deadline', type: 'uint64' },
-      { name: '_status', type: 'uint8' },
-      { name: '_totalPledged', type: 'uint256' },
-      { name: '_metadataURI', type: 'string' },
-      { name: '_factory', type: 'address' },
-    ],
-  },
-] as const;
 
 const campaignCreatedEvent = parseAbiItem(
   'event CampaignCreated(address indexed campaign, address indexed creator, uint256 indexed id)'
@@ -131,12 +111,12 @@ async function syncRange(fromBlock: bigint, toBlock: bigint): Promise<void> {
 async function fullSyncIfNeeded(): Promise<void> {
   if (latestCheckpoint > 0n) return;
   console.log('🧱 Running full sync...');
-  const head = await httpClient.getBlockNumber({ blockTag: 'latest' });
+  const head = await httpClient.getBlockNumber();
   await syncRange(DEPLOY_BLOCK, head);
 }
 
 async function catchUpFromCheckpoint(): Promise<void> {
-  const head = await httpClient.getBlockNumber({ blockTag: 'latest' });
+  const head = await httpClient.getBlockNumber();
   const nextBlock = latestCheckpoint === 0n ? DEPLOY_BLOCK : latestCheckpoint + 1n;
   if (head < nextBlock) return;
   await syncRange(nextBlock, head);
@@ -169,7 +149,9 @@ async function handleCampaignLogs(logs: CampaignCreatedLog[]): Promise<void> {
   }
 }
 
-async function fetchCampaignSummaries(addresses: Address[]): Promise<Array<CampaignSummary | null>> {
+async function fetchCampaignSummaries(
+  addresses: Address[]
+): Promise<Array<CampaignSummary | null>> {
   if (!addresses.length) return [];
   const responses = await withRetry(
     () =>
@@ -177,7 +159,7 @@ async function fetchCampaignSummaries(addresses: Address[]): Promise<Array<Campa
         allowFailure: true,
         contracts: addresses.map((address) => ({
           address,
-          abi: CAMPAIGN_ABI,
+          abi: campaignAbi,
           functionName: 'getSummary',
         })),
       }),
@@ -190,7 +172,10 @@ async function fetchCampaignSummaries(addresses: Address[]): Promise<Array<Campa
       if (response.status === 'success') {
         return normalizeSummary(response.result as readonly unknown[]);
       }
-      console.warn(`⚠️ Multicall failed for ${addresses[idx]}, fallback to single read`, response.error);
+      console.warn(
+        `⚠️ Multicall failed for ${addresses[idx]}, fallback to single read`,
+        response.error
+      );
       try {
         return await withRetry(() => fetchCampaignSummary(addresses[idx]), 2, 1_000);
       } catch (error) {
@@ -209,7 +194,7 @@ function normalizeSummary(result: readonly unknown[]): CampaignSummary {
     number,
     bigint,
     string,
-    Address
+    Address,
   ];
   return {
     creator,
@@ -225,13 +210,17 @@ function normalizeSummary(result: readonly unknown[]): CampaignSummary {
 async function fetchCampaignSummary(addr: Address): Promise<CampaignSummary> {
   const res = await wsClient.readContract({
     address: addr,
-    abi: CAMPAIGN_ABI,
+    abi: campaignAbi,
     functionName: 'getSummary',
   });
-  return normalizeSummary(res);
+  return normalizeSummary(res as readonly unknown[]);
 }
 
-async function upsertCampaign(addr: Address, summary: CampaignSummary, block: bigint): Promise<void> {
+async function upsertCampaign(
+  addr: Address,
+  summary: CampaignSummary,
+  block: bigint
+): Promise<void> {
   console.log(`📦 Upsert campaign ${addr} @ block ${block}`);
   await db
     .insert(campaigns)
@@ -297,19 +286,13 @@ async function startWatchers(): Promise<void> {
   registerWatcher(
     wsClient.watchContractEvent({
       address: FACTORY,
-      event: campaignCreatedEvent,
+      abi: campaignFactoryAbi,
+      eventName: 'CampaignCreated',
       poll: false,
       onLogs: async (logs) => {
         await handleCampaignLogs(logs as CampaignCreatedLog[]);
       },
       onError: handleWatchError,
-      onReorg: async (logs) => {
-        const log = (logs as CampaignCreatedLog[] | undefined)?.[0];
-        const fallback = log?.blockNumber ?? latestCheckpoint;
-        const reorgBlock = fallback > DEPLOY_BLOCK ? fallback : DEPLOY_BLOCK;
-        console.warn(`⚠️ Reorg detected near block ${reorgBlock}. Resyncing...`);
-        await catchUpFrom(reorgBlock);
-      },
     })
   );
 
@@ -337,13 +320,6 @@ function queueReconnect(): void {
       queueReconnect();
     }
   }, delayMs);
-}
-
-async function catchUpFrom(startBlock: bigint): Promise<void> {
-  const head = await httpClient.getBlockNumber({ blockTag: 'latest' });
-  const from = startBlock < DEPLOY_BLOCK ? DEPLOY_BLOCK : startBlock;
-  if (head < from) return;
-  await syncRange(from, head);
 }
 
 /* --------------------------
