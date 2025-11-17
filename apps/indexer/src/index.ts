@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { withRetry, delay, formatBigInt, formatAddress } from './utils.js';
 import { CampaignStatus, type CampaignSummary } from './types.js';
 import { campaignAbi, campaignFactoryAbi } from '../abi';
-
+console.log('🔥 BUILD VERSION = 2025-11-17-22:30');
 /* --------------------------
  *  ENV & CONSTANTS
  * -------------------------- */
