@@ -38,10 +38,23 @@ const httpClient = createPublicClient({
   transport: http(RPC_HTTP),
 });
 
-const wsClient = createPublicClient({
-  chain,
-  transport: webSocket(RPC_WSS),
-});
+// WebSocket 客户端（延迟初始化，失败时回退到 HTTP）
+let wsClient: ReturnType<typeof createPublicClient> | null = null;
+
+async function initWsClient(): Promise<void> {
+  try {
+    wsClient = createPublicClient({
+      chain,
+      transport: webSocket(RPC_WSS),
+    });
+    // 测试连接
+    await wsClient.getBlockNumber();
+    console.log('✅ WebSocket client initialized');
+  } catch (error) {
+    console.warn('⚠️ WebSocket initialization failed, will use HTTP polling:', error);
+    wsClient = null;
+  }
+}
 
 const campaignCreatedEvent = parseAbiItem(
   'event CampaignCreated(address indexed campaign, address indexed creator, uint256 indexed id)'
@@ -153,9 +166,13 @@ async function fetchCampaignSummaries(
   addresses: Address[]
 ): Promise<Array<CampaignSummary | null>> {
   if (!addresses.length) return [];
+
+  // 如果 WebSocket 不可用，使用 HTTP 客户端
+  const client = wsClient || httpClient;
+
   const responses = await withRetry(
     () =>
-      wsClient.multicall({
+      client.multicall({
         allowFailure: true,
         contracts: addresses.map((address) => ({
           address,
@@ -208,7 +225,9 @@ function normalizeSummary(result: readonly unknown[]): CampaignSummary {
 }
 
 async function fetchCampaignSummary(addr: Address): Promise<CampaignSummary> {
-  const res = await wsClient.readContract({
+  // 如果 WebSocket 不可用，使用 HTTP 客户端
+  const client = wsClient || httpClient;
+  const res = await client.readContract({
     address: addr,
     abi: campaignAbi,
     functionName: 'getSummary',
@@ -273,30 +292,47 @@ async function startWatchers(): Promise<void> {
   stopWatchers();
   reconnectAttempts = 0;
 
-  registerWatcher(
-    wsClient.watchBlocks({
-      blockTag: 'finalized',
-      onBlock: async (block) => {
-        console.log(`🔔 Finalized block ${block.number}`);
-      },
-      onError: handleWatchError,
-    })
-  );
+  // 如果 WebSocket 不可用，跳过实时监听，使用轮询模式
+  if (!wsClient) {
+    console.log('⚠️ WebSocket not available, using polling mode');
+    // 设置定期轮询
+    setInterval(async () => {
+      await catchUpFromCheckpoint().catch((error) => console.error('❌ Polling error', error));
+    }, UPDATE_INTERVAL_MS);
+    return;
+  }
 
-  registerWatcher(
-    wsClient.watchContractEvent({
-      address: FACTORY,
-      abi: campaignFactoryAbi,
-      eventName: 'CampaignCreated',
-      poll: false,
-      onLogs: async (logs) => {
-        await handleCampaignLogs(logs as CampaignCreatedLog[]);
-      },
-      onError: handleWatchError,
-    })
-  );
+  try {
+    registerWatcher(
+      wsClient.watchBlocks({
+        blockTag: 'finalized',
+        onBlock: async (block) => {
+          console.log(`🔔 Finalized block ${block.number}`);
+        },
+        onError: handleWatchError,
+      })
+    );
 
-  console.log('👀 Live watchers started');
+    registerWatcher(
+      wsClient.watchContractEvent({
+        address: FACTORY,
+        abi: campaignFactoryAbi,
+        eventName: 'CampaignCreated',
+        onLogs: async (logs) => {
+          await handleCampaignLogs(logs as CampaignCreatedLog[]);
+        },
+        onError: handleWatchError,
+      })
+    );
+
+    console.log('👀 Live watchers started');
+  } catch (error) {
+    console.error('❌ Failed to start watchers', error);
+    // 回退到轮询模式
+    setInterval(async () => {
+      await catchUpFromCheckpoint().catch((error) => console.error('❌ Polling error', error));
+    }, UPDATE_INTERVAL_MS);
+  }
 }
 
 function handleWatchError(error: unknown): void {
@@ -307,6 +343,11 @@ function handleWatchError(error: unknown): void {
 
 function queueReconnect(): void {
   if (reconnectTimer) return;
+  // 如果 WebSocket 不可用，不尝试重连
+  if (!wsClient) {
+    console.log('⚠️ WebSocket not available, skipping reconnect');
+    return;
+  }
   const delayMs = RECONNECT_BACKOFF[Math.min(reconnectAttempts, RECONNECT_BACKOFF.length - 1)];
   reconnectAttempts = Math.min(reconnectAttempts + 1, RECONNECT_BACKOFF.length - 1);
   console.log(`🔁 Reconnecting WebSocket in ${delayMs}ms`);
@@ -362,6 +403,9 @@ async function main() {
   console.log(`📌 Factory: ${FACTORY}`);
   console.log(`📡 HTTP: ${RPC_HTTP}`);
   console.log(`📡 WSS: ${RPC_WSS}`);
+
+  // 初始化 WebSocket 客户端（非阻塞）
+  await initWsClient();
 
   await readCheckpoint();
   await fullSyncIfNeeded();
