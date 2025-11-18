@@ -1,0 +1,37 @@
+# 排除构建产物和依赖
+**/dist
+**/node_modules
+**/.next
+**/out
+**/build
+**/.cache
+
+# 排除开发文件
+**/.git
+**/.gitignore
+**/.env.local
+**/.env.*.local
+**/*.log
+**/.DS_Store
+
+# 排除测试和文档
+**/test
+**/tests
+**/*.test.ts
+**/*.test.js
+**/*.spec.ts
+**/*.spec.js
+**/README.md
+**/docs
+
+# 排除 IDE 配置
+**/.vscode
+**/.idea
+**/*.swp
+**/*.swo
+
+# 排除其他不需要的文件
+**/coverage
+**/.nyc_output
+**/.turbo
+

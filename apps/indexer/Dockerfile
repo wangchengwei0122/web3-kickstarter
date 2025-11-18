@@ -11,10 +11,13 @@ COPY . .
 # 安装所有 workspace 依赖（非常关键）
 RUN pnpm install
 
+# 清理旧的构建产物（确保使用最新代码）
+RUN rm -rf apps/indexer/dist packages/db/dist
+
 # 构建共享 db schema（供 indexer/api 使用）
 RUN pnpm --filter "@packages/db" build
 
-# 构建 indexer
+# 构建 indexer（强制重新构建）
 RUN pnpm --filter "@apps/indexer" build
 
 # ---------- Runtime Stage ----------
