@@ -17,8 +17,26 @@ RUN rm -rf apps/indexer/dist packages/db/dist
 # 构建共享 db schema（供 indexer/api 使用）
 RUN pnpm --filter "@packages/db" build
 
+# 验证 db 构建产物
+RUN test -d packages/db/dist || (echo "❌ DB build failed" && exit 1)
+
 # 构建 indexer（强制重新构建）
-RUN pnpm --filter "@apps/indexer" build
+# 确保在 monorepo 根目录执行，以便正确处理工作区依赖
+RUN echo "🔨 Building indexer from monorepo root..." && \
+    pwd && \
+    pnpm --filter "@apps/indexer" build && \
+    echo "✅ Build completed"
+
+# 验证构建产物是否存在（详细输出）
+RUN echo "📦 Checking build artifacts..." && \
+    pwd && \
+    ls -la apps/indexer/ && \
+    test -d apps/indexer/dist || (echo "❌ Build failed: dist directory not found" && exit 1) && \
+    echo "📁 Contents of apps/indexer/dist:" && \
+    ls -la apps/indexer/dist/ && \
+    test -f apps/indexer/dist/src/index.js || (echo "❌ Build failed: dist/src/index.js not found" && exit 1) && \
+    test -f apps/indexer/dist/abi/index.js || (echo "❌ Build failed: dist/abi/index.js not found" && exit 1) && \
+    echo "✅ Build artifacts verified: dist/src/index.js and dist/abi/index.js exist"
 
 # ---------- Runtime Stage ----------
 FROM node:20-slim AS runner
@@ -37,4 +55,7 @@ COPY --from=builder /app/apps/indexer /app/apps/indexer
 
 WORKDIR /app/apps/indexer
 
-CMD ["node", "dist/index.js"]
+# 验证运行时文件是否存在
+RUN test -f dist/src/index.js || (echo "❌ Runtime check failed: dist/src/index.js not found" && ls -la . && ls -la dist/ 2>&1 && ls -la dist/src/ 2>&1 || true && exit 1)
+
+CMD ["node", "dist/src/index.js"]
