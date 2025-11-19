@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createPublicClient, http, parseAbiItem, webSocket, type Address, type Log } from 'viem';
 import { db } from './db/client.js';
 import { campaigns, checkpoints } from '@packages/db';
@@ -9,6 +10,7 @@ console.log('🔥 BUILD VERSION = 2025-11-17-22:30');
 /* --------------------------
  *  ENV & CONSTANTS
  * -------------------------- */
+console.log(process.env.RPC_HTTP);
 const RPC_HTTP = must('RPC_HTTP');
 const RPC_WSS = must('RPC_WSS');
 const CHAIN_ID = Number(must('CHAIN_ID'));
