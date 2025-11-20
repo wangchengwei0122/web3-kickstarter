@@ -1,8 +1,8 @@
 /**
  * Cloudflare Worker for Fundr Edge Cache Layer
- * 
+ *
  * Architecture: apps/api → apps/edge → apps/web
- * 
+ *
  * This worker:
  * - Fetches data exclusively from apps/api
  * - Uses KV for read-through caching
@@ -92,11 +92,7 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 /**
  * Fetches data from apps/api with error handling
  */
-async function fetchFromApi<T = unknown>(
-	env: Env,
-	path: string,
-	options: RequestInit = {}
-): Promise<ApiResponse<T>> {
+async function fetchFromApi<T = unknown>(env: Env, path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
 	const apiUrl = env.API_URL.replace(/\/$/, ''); // Remove trailing slash
 	const url = `${apiUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
@@ -183,15 +179,10 @@ async function cacheSet(env: Env, key: string, value: unknown, ttlSeconds: numbe
 
 /**
  * Read-through cache wrapper (stale-while-revalidate pattern)
- * 
+ *
  * TODO: Implement detailed caching rules in next iteration
  */
-async function withCache<T>(
-	env: Env,
-	key: string,
-	fetcher: () => Promise<T>,
-	ttlSeconds: number = CACHE_TTL
-): Promise<T> {
+async function withCache<T>(env: Env, key: string, fetcher: () => Promise<T>, ttlSeconds: number = CACHE_TTL): Promise<T> {
 	// Try to get from cache first
 	const cached = await cacheGet<T>(env, key);
 	if (cached !== null) {
@@ -259,7 +250,7 @@ async function handleCampaignsRequest(request: Request, env: Env): Promise<Respo
 
 			return response.data;
 		},
-		60 // Cache for 60 seconds
+		60, // Cache for 60 seconds
 	);
 
 	// Transform API response to backward-compatible format
@@ -303,7 +294,7 @@ async function handleCampaignDetailRequest(request: Request, env: Env, address: 
 
 			return response.data;
 		},
-		120 // Cache for 120 seconds
+		120, // Cache for 120 seconds
 	);
 
 	return jsonResponse(apiResponse, { status: 200, headers: { 'Cache-Control': 'public, max-age=120' } });
@@ -348,7 +339,7 @@ async function handleStatsRequest(env: Env): Promise<Response> {
 
 			return response.data;
 		},
-		120 // Cache for 120 seconds
+		120, // Cache for 120 seconds
 	);
 
 	return jsonResponse(apiResponse, { status: 200, headers: { 'Cache-Control': 'public, max-age=120' } });
@@ -393,6 +384,7 @@ export default {
 		try {
 			// Route handling
 			if (request.method === 'GET' && url.pathname === '/campaigns') {
+				console.log('1111');
 				response = await handleCampaignsRequest(request, env);
 			} else if (request.method === 'GET' && url.pathname.startsWith('/campaigns/')) {
 				// Extract address from path: /campaigns/:address
@@ -418,7 +410,7 @@ export default {
 					error: 'Internal Server Error',
 					message: err instanceof Error ? err.message : 'Unknown error',
 				},
-				{ status: 500 }
+				{ status: 500 },
 			);
 		}
 
