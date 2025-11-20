@@ -384,7 +384,6 @@ export default {
 		try {
 			// Route handling
 			if (request.method === 'GET' && url.pathname === '/campaigns') {
-				console.log('1111');
 				response = await handleCampaignsRequest(request, env);
 			} else if (request.method === 'GET' && url.pathname.startsWith('/campaigns/')) {
 				// Extract address from path: /campaigns/:address
