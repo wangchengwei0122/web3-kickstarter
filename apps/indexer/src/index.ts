@@ -6,11 +6,9 @@ import { eq } from 'drizzle-orm';
 import { withRetry, delay, formatBigInt, formatAddress } from './utils.js';
 import { CampaignStatus, type CampaignSummary } from './types.js';
 import { campaignAbi, campaignFactoryAbi } from '../abi/index.js';
-console.log('🔥 BUILD VERSION = 2025-11-17-22:30');
 /* --------------------------
  *  ENV & CONSTANTS
  * -------------------------- */
-console.log(process.env.RPC_HTTP);
 const RPC_HTTP = must('RPC_HTTP');
 const RPC_WSS = must('RPC_WSS');
 const CHAIN_ID = Number(must('CHAIN_ID'));
@@ -58,8 +56,12 @@ async function initWsClient(): Promise<void> {
   }
 }
 
-const campaignCreatedEvent = parseAbiItem(
-  'event CampaignCreated(address indexed campaign, address indexed creator, uint256 indexed id)'
+// const campaignCreatedEvent = parseAbiItem(
+//   'event CampaignCreated(address indexed campaign, address indexed creator, uint256 indexed id)'
+// );
+
+const campaignCreatedEvent = campaignFactoryAbi.find(
+  (item) => item.type === 'event' && item.name === 'CampaignCreated'
 );
 
 type CampaignCreatedLog = Log & {
