@@ -1,127 +1,206 @@
-# Repository Guidelines
+# Repository Guidelines (Updated for Indexer + API Architecture)
 
 ## Project Structure & Module Organization
 
-- Monorepo managed with `pnpm` workspaces.
-- `apps/web` — Next.js front-end (Tailwind, ESLint). Public assets in `apps/web/public`, shared utils in `apps/web/lib`.
-- `apps/edge` — Cloudflare Worker (Wrangler, TypeScript). Local secrets in `apps/edge/.dev.vars`.
-- `packages/contracts` — Foundry smart contracts (`src`, `script`, `out`, `deployments`, `test`). Shared ABI exported via `packages/contracts/abi`.
-- `scripts/` — helper scripts for compile/deploy and syncing ABI.
+Monorepo powered by `pnpm` workspaces:
 
-## Build, Test, and Development Commands
+- `apps/web`  
+  Next.js 15 front-end (App Router). Fetches data **exclusively from `apps/api`.**
 
-- Install: `pnpm install`
-- All-in-one dev (anvil + edge + web): `pnpm dev`
-- Run individually: `pnpm dev:anvil`, `pnpm dev:edge`, `pnpm dev:web`
-- Contracts build: `pnpm contracts:build` (runs `forge build`)
-- Local deploy (anvil): `pnpm contracts:deploy:local:auto`
-- Sepolia deploy: `pnpm contracts:deploy:sepolia` (requires `PRIVATE_KEY`, `SEPOLIA_RPC_URL`)
-- Edge deploy: `pnpm deploy:edge`
-- Edge KV helpers: `pnpm edge:kv:create`, `pnpm edge:kv:create:preview`
+- `apps/api`  
+  Fastify REST API service.  
+  **The ONLY source of truth for frontend & edge.**  
+  Reads data from PostgreSQL (populated by indexer).
 
-## Coding Style & Naming Conventions
+- `apps/indexer`  
+  Long-running Node service (Render).  
+  Uses viem WebSocket transport to index the blockchain and store:
+  - campaigns
+  - checkpoints  
+    into PostgreSQL (via Drizzle ORM).
 
-- Prettier enforced via Husky + lint-staged on `*.{ts,tsx,js,jsx,css,md,json,sol}`. Root config: `.prettierrc.json`.
-- TypeScript/React: follow ESLint rules in `apps/web/eslint.config.mjs`. Use PascalCase for components, camelCase for variables/functions, kebab-case for files (except React components).
-- Solidity: target `0.8.30`, optimize (see `foundry.toml`). Lint with `solhint` (`.solhint.json`). Prefer explicit visibility and events for state changes.
+- `apps/edge`  
+  Cloudflare Worker.  
+  IMPORTANT:
+  - Does **NOT** fetch blockchain directly.
+  - Does **NOT** perform indexing.
+  - Only calls `apps/api` and performs KV caching.
+  - Eventually replaced by a thin read-cache layer.
 
-## Testing Guidelines
+- `packages/contracts`  
+  Foundry smart contracts. ABI output synced to:
+  - `apps/web`
+  - `apps/api` (if needed)
 
-- Contracts: `forge test` inside `packages/contracts`.
-- Edge Worker: Vitest config in `apps/edge/vitest.config.mts`. Run with `pnpm --filter @apps/edge exec vitest`.
-- Test files: name as `*.t.sol` (Foundry) and `*.spec.ts` (Edge). Aim for meaningful coverage on key flows (factory creation, campaign lifecycle, KV handlers).
+- `packages/db`  
+  Shared drizzle schema for both:
+  - `apps/indexer`
+  - `apps/api`
 
-## Commit & Pull Request Guidelines
-
-- Conventional Commits enforced via commitlint. Use `pnpm commit` (commitizen) to compose messages.
-- Types: `feat|fix|docs|style|refactor|perf|test|chore|revert`. Keep header ≤ 72 chars; example: `feat(web): add campaign list page`.
-- PRs: include clear description, linked issues, and screenshots for UI changes. Note env/config changes (e.g., new `NEXT_PUBLIC_*` or Wrangler bindings).
-
-## Security & Configuration Tips
-
-- Do not commit secrets. Use `apps/edge/.dev.vars` for Worker and `apps/web/.env.local` for Next.js. Public variables must be prefixed `NEXT_PUBLIC_`.
-- For deployments, export `PRIVATE_KEY`, `TREASURY`, `FEE_BPS`, and network RPC URLs as required. ABI is auto-synced to `apps/web/lib/abi` and `packages/contracts/abi` by scripts.
+- `scripts/`  
+  Utilities for ABI sync, deployments, migrations, environment setup.
 
 ---
 
-# Codex Agent Configuration
+# Data Flow (single source of truth)
 
-## 🧠 Agent Role Definition
+```
+Blockchain → Indexer (WS) → PostgreSQL → API → Edge Cache → Web Frontend
+```
 
-You are the **primary AI contributor** for this repository.
+Rules:
 
-Your goals:
-
-1. Accelerate development of the Fundr platform by generating high-quality TypeScript, Solidity, and Cloudflare Worker code.
-2. Maintain consistency between smart contracts, edge KV caches, and the front-end UI.
-3. Follow best practices for security, typing, and gas efficiency.
-4. Produce clear, minimal diffs with human-readable explanations.
-5. When unsure, **suggest** instead of **executing**.
-
-You act as a **senior full-stack Web3 engineer** collaborating in this monorepo.
+- **Indexer = the ONLY chain reader**
+- **API = the ONLY database reader**
+- **Web/Edge NEVER read the blockchain directly**
 
 ---
 
-## ✏️ Editing Behavior
+# Build & Development Commands
 
-- Modify **only** files directly relevant to the request.
-- Avoid large sweeping changes; prefer incremental diffs.
-- Preserve existing exports, naming, and APIs when refactoring.
-- Create new files only if necessary, under appropriate workspace paths.
-- Include short inline comments (`//`) explaining non-trivial logic.
-- Before executing shell commands or git actions, request confirmation.
+## Global
 
----
+- Install deps: `pnpm install`
+- All-in-one local dev: `pnpm dev`
 
-## 🧩 Prompt Patterns
+## Apps
 
-Common tasks you may perform:
+- Web: `pnpm dev:web`
+- Edge: `pnpm dev:edge`
+- API: `pnpm --filter @apps/api dev`
+- Indexer: `pnpm --filter @apps/indexer dev`
 
-- “Refactor `DialogService` to handle `keepOpen` logic internally.”
-- “Add a `useCampaignBalance` hook using `readContract` from wagmi.”
-- “Implement optimistic UI updates after pledge transaction.”
-- “Add a Cloudflare Worker endpoint to expose cached campaign summaries.”
-- “Generate a Foundry script for automated contract deployment.”
-- “Fix hydration warnings in `/projects/[projectId]/page.tsx`.”
-- “Create a new `Refund` button that triggers `refundCampaign()` on contract.”
+## Contracts
 
-When generating new modules:
+- Build: `pnpm contracts:build`
+- Local deploy: `pnpm contracts:deploy:local:auto`
+- Sepolia deploy: `pnpm contracts:deploy:sepolia`
 
-- Hooks → `apps/web/hooks/`
-- UI components → `apps/web/components/`
-- Edge logic → `apps/edge/src/`
-- Solidity contracts → `packages/contracts/src/`
-- Shared utilities → `apps/web/lib/` or `packages/utils/`
+## Migrations
+
+- Generate: `pnpm db:generate`
+- Push: `pnpm db:push`
 
 ---
 
-## ⚙️ Framework Context
+# Coding Style
 
-- **Next.js 15 (App Router)** — `apps/web/app/`
-- **React 19**, **TypeScript 5.x**
-- **TailwindCSS** for styling (`tailwind.config.ts`)
-- **wagmi 2.x** + **viem 2.x** for on-chain interactions
-- **Foundry** for smart contracts (`forge`, `cast`, `anvil`)
-- **Cloudflare Workers (Wrangler v3)** for edge deployment and KV operations
-- **Testing**: Vitest (Edge), Playwright (Web), Foundry (Contracts)
+- TypeScript / React:
+  - PascalCase components, camelCase functions
+  - Kebab-case filenames except components
+  - Follow root ESLint + project-specific overrides
+- Solidity:
+  - Compiler `0.8.30`
+  - Optimize & explicit visibility
+  - Test with Foundry
 
 ---
 
-## 💬 Response Format
+# AI Agent Role
+
+You are the **primary AI collaborator** for this repo.
+
+Your priorities:
+
+1. Maintain consistency between:
+   - indexer inserts
+   - database schema
+   - API responses
+   - web frontend consumers
+
+2. Only modify code **relevant to the request**.
+
+3. Prefer small, focused diffs.
+
+4. When in doubt, propose an approach instead of executing a large refactor.
+
+---
+
+# Editing Rules
+
+- Avoid breaking existing APIs.
+- Do not introduce new env vars without asking.
+- New modules go to:
+  - Web hooks → `apps/web/hooks`
+  - API routes → `apps/api/src/routes`
+  - Edge logic → `apps/edge/src`
+  - Indexer modules → `apps/indexer/src`
+  - Shared utils → `packages/utils` or `packages/db`
+
+---
+
+# API Layer Responsibilities (`apps/api`)
+
+The API must:
+
+- Read from PostgreSQL through Drizzle
+- Expose REST endpoints consumed by web/edge
+- NEVER call blockchain directly
+- Support pagination, sorting, filtering
+- Provide enriched campaign summary for frontend
+
+Edge Worker uses the API for all reads.
+
+---
+
+# Edge Worker Responsibilities (`apps/edge`)
+
+- Fetch data from `apps/api`
+- Optionally store read-through cache in KV
+- Provide CDN-style high-performance read endpoints
+- NEVER:
+  - Index blockchain
+  - Access chain RPC
+  - Duplicate API logic
+
+---
+
+# Indexer Responsibilities (`apps/indexer`)
+
+- ONLY component allowed to:
+  - Connect to blockchain RPC/WebSocket
+  - Subscribe to blocks/events
+  - Run full sync or incremental sync
+- Must:
+  - Write clean data to PostgreSQL via Drizzle
+  - Protect RPC usage (retry, backoff, WS reconnect)
+  - Produce logs but never crash loop
+
+---
+
+# Response Format (for AI)
 
 When generating code:
 
-- Use fenced code blocks with language identifiers (` ```ts`, ` ```sol`).
-- Start with the filename and full relative path.
-- Keep changes minimal and focused on the request.
-- Include short explanations of each change.
-- Number steps clearly if multiple actions are involved.
-- For multi-file operations, summarize all affected paths at the end.
+- Use fenced code blocks (` ```ts`, ` ```sol`).
+- Prefix with the full relative path.
+- Keep diff minimal and readable.
+- Provide bullet-point explanation of changes.
+- Summaries for multi-file modifications.
 
-Example:
+---
 
-```diff
-# apps/web/app/projects/[projectId]/page.tsx
-+ Added a new `Refund` button calling `refundCampaign()`.
-+ Integrated `useWaitForTransactionReceipt` to confirm on-chain success.
-```
+# Examples of Valid Tasks
+
+- “Add GET `/campaigns/:id` to the API with Drizzle”
+- “Add useCampaign(id) hook in frontend”
+- “Add KV cache wrapper in apps/edge”
+- “Optimize indexer: split WS client and sync logic”
+- “Add script to verify ABIs match contracts/out”
+
+Examples of Invalid Tasks:
+
+- ❌ “Indexer writes directly to edge KV”
+- ❌ “Web fetches directly from RPC”
+- ❌ “Edge scans blocks or reads contract data”
+- ❌ “Rewrite the entire repo”
+
+---
+
+# Summary
+
+This repository follows a strict architecture:
+
+- **CHAIN → INDEXER → DB → API → EDGE → WEB**
+- Keep all code consistent with this structure.
+- All business data flows from PostgreSQL outward.
