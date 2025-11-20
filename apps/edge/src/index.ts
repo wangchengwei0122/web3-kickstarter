@@ -1,25 +1,40 @@
-import { createPublicClient, http, type AbiEvent, type Address } from 'viem';
-import { campaignAbi, campaignFactoryAbi } from '../abi';
+/**
+ * Cloudflare Worker for Fundr Edge Cache Layer
+ * 
+ * Architecture: apps/api → apps/edge → apps/web
+ * 
+ * This worker:
+ * - Fetches data exclusively from apps/api
+ * - Uses KV for read-through caching
+ * - Provides backward-compatible routes
+ * - NEVER accesses blockchain directly
+ */
 
-const DEFAULT_LIMIT = 12;
-const MAX_INDEX_SIZE = 1024;
-const MAX_RETRIES = 4;
-const RETRY_DELAY_MS = 750;
+// ============================================================================
+// Types & Interfaces
+// ============================================================================
 
-const campaignCreatedEvent = getCampaignCreatedEvent();
-
-interface CampaignRecord {
-	address: Address;
-	creator: Address;
-	goal: string;
-	deadline: number;
-	status: number;
-	totalPledged: string;
-	metadataURI: string;
-	createdAt: number;
-	createdBlock: number;
+interface Env {
+	KV: KVNamespace;
+	API_URL: string; // Base URL for apps/api (e.g., "http://localhost:3001")
 }
 
+interface ApiSuccessResponse<T = unknown> {
+	success: true;
+	data: T;
+}
+
+interface ApiErrorResponse {
+	success: false;
+	error: {
+		code: string;
+		message: string;
+	};
+}
+
+type ApiResponse<T = unknown> = ApiSuccessResponse<T> | ApiErrorResponse;
+
+// Campaign list response (backward compatible with old format)
 interface CampaignListResponse {
 	campaigns: CampaignRecord[];
 	cursor: number;
@@ -29,21 +44,21 @@ interface CampaignListResponse {
 	total: number;
 }
 
-interface DeadlineEntry {
+interface CampaignRecord {
 	address: string;
+	creator: string;
+	goal: string;
 	deadline: number;
+	status: number | string;
+	totalPledged: string;
+	metadataURI: string;
+	createdAt: number;
+	createdBlock: number;
 }
 
-interface Env {
-	KV: KVNamespace;
-	RPC_URL: string;
-	CHAIN_ID: string;
-	FACTORY: string;
-	DEPLOY_BLOCK: string;
-	INDEXER_ENABLED?: string; // "true" to enable background indexing
-	INDEX_INTERVAL_MS?: string; // minimum interval between runs
-	INDEXER_KEY?: string; // manual /run auth key
-}
+// ============================================================================
+// CORS & Response Helpers
+// ============================================================================
 
 const corsHeaders: Record<string, string> = {
 	'Access-Control-Allow-Origin': '*',
@@ -53,7 +68,7 @@ const corsHeaders: Record<string, string> = {
 	Vary: 'Origin',
 };
 
-function withCors(init: ResponseInit = {}, body?: BodyInit | null) {
+function withCors(init: ResponseInit = {}, body?: BodyInit | null): Response {
 	const headers = new Headers(init.headers ?? {});
 	for (const [key, value] of Object.entries(corsHeaders)) {
 		headers.set(key, value);
@@ -64,207 +79,154 @@ function withCors(init: ResponseInit = {}, body?: BodyInit | null) {
 	return new Response(body, { ...init, headers });
 }
 
-function jsonResponse(body: unknown, init: ResponseInit = {}) {
+function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 	const headers = new Headers(init.headers ?? {});
 	headers.set('Content-Type', 'application/json');
 	return withCors({ ...init, headers }, JSON.stringify(body));
 }
 
-const isValidAddress = (value: string): value is Address => /^0x[a-fA-F0-9]{40}$/.test(value);
-const normaliseAddress = (value: string) => value.toLowerCase();
+// ============================================================================
+// API Client
+// ============================================================================
 
-function keyPrefixForFactory(env: Env) {
-	const factory = resolveFactory(env.FACTORY);
-	return `kv:crowd:${normaliseAddress(factory)}`;
-}
+/**
+ * Fetches data from apps/api with error handling
+ */
+async function fetchFromApi<T = unknown>(
+	env: Env,
+	path: string,
+	options: RequestInit = {}
+): Promise<ApiResponse<T>> {
+	const apiUrl = env.API_URL.replace(/\/$/, ''); // Remove trailing slash
+	const url = `${apiUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
-function latestIndexKey(env: Env) {
-	return `${keyPrefixForFactory(env)}:index`;
-}
-
-function deadlineIndexKey(env: Env) {
-	return `${keyPrefixForFactory(env)}:index:deadline`;
-}
-
-function checkpointKey(env: Env) {
-	return `${keyPrefixForFactory(env)}:checkpoint`;
-}
-
-function lastRunKey(env: Env) {
-	return `${keyPrefixForFactory(env)}:lastRun`;
-}
-
-function campaignKey(env: Env, address: string) {
-	return `${keyPrefixForFactory(env)}:campaign:${normaliseAddress(address)}`;
-}
-
-function resolveChainId(value?: string) {
-	if (!value) {
-		throw new Error('CHAIN_ID env is not configured');
-	}
-	const parsed = Number.parseInt(value, 10);
-	if (Number.isNaN(parsed)) {
-		throw new Error(`Invalid CHAIN_ID env: ${value}`);
-	}
-	return parsed;
-}
-
-function resolveFactory(value?: string) {
-	if (!value || !isValidAddress(value)) {
-		throw new Error('FACTORY env must be a valid address');
-	}
-	return value as Address;
-}
-
-function resolveDeployBlock(value?: string) {
-	if (!value || value.length === 0) {
-		throw new Error('DEPLOY_BLOCK env is not configured');
-	}
-	return parseRequiredBigInt(value, 'DEPLOY_BLOCK');
-}
-
-function resolveRpcUrl(value?: string) {
-	if (!value || value.trim().length === 0) {
-		throw new Error('RPC_URL env is not configured');
-	}
-	return value.trim();
-}
-
-function getCampaignCreatedEvent(): AbiEvent {
-	const event = campaignFactoryAbi.find((item): item is AbiEvent => item.type === 'event' && item.name === 'CampaignCreated');
-	if (!event) {
-		throw new Error('CampaignCreated event not found in factory ABI');
-	}
-	return event;
-}
-
-async function withRetry<T>(operation: () => Promise<T>, attempt = 0): Promise<T> {
 	try {
-		return await operation();
-	} catch (error) {
-		if (attempt >= MAX_RETRIES) {
-			throw error;
+		const response = await fetch(url, {
+			...options,
+			headers: {
+				'Content-Type': 'application/json',
+				...options.headers,
+			},
+		});
+
+		if (!response.ok) {
+			return {
+				success: false,
+				error: {
+					code: `HTTP_${response.status}`,
+					message: `API request failed: ${response.statusText}`,
+				},
+			};
 		}
-		const delay = RETRY_DELAY_MS * Math.pow(2, attempt);
-		await new Promise((resolve) => setTimeout(resolve, delay));
-		return withRetry(operation, attempt + 1);
-	}
-}
 
-function parseRequiredBigInt(value: string, label: string): bigint {
-	try {
-		return BigInt(value);
+		const data = await response.json();
+		return data as ApiResponse<T>;
 	} catch (error) {
-		throw new Error(`Invalid ${label}: ${value}`);
+		console.error('API fetch error:', error);
+		return {
+			success: false,
+			error: {
+				code: 'FETCH_ERROR',
+				message: error instanceof Error ? error.message : 'Unknown fetch error',
+			},
+		};
 	}
 }
 
-async function shouldRunIndexer(env: Env) {
-	// Only run when explicitly enabled
-	if (env.INDEXER_ENABLED !== 'true') return false;
+// ============================================================================
+// KV Cache Helpers (Skeleton - to be implemented in detail later)
+// ============================================================================
 
-	const now = Date.now();
-	const minInterval = Number.parseInt(env.INDEX_INTERVAL_MS ?? '', 10) || 15 * 60 * 1000; // default 15m
+const CACHE_TTL = 60; // Default cache TTL in seconds (30-120s range)
 
-	const last = await env.KV.get(lastRunKey(env));
-	if (!last) {
-		await env.KV.put(lastRunKey(env), String(now));
-		return true;
-	}
-	const lastNum = Number.parseInt(last, 10);
-	if (!Number.isFinite(lastNum) || now - lastNum >= minInterval) {
-		await env.KV.put(lastRunKey(env), String(now));
-		return true;
-	}
-	return false;
+/**
+ * KV key prefixes for backward compatibility
+ */
+function kvKeyLatest(env: Env): string {
+	return 'kv:crowd:latest';
 }
 
-async function maybeScheduleIndexer(env: Env, ctx: ExecutionContext) {
-	if (await shouldRunIndexer(env)) {
-		ctx.waitUntil(runIndexer(env));
-	}
+function kvKeyCampaign(env: Env, address: string): string {
+	const normalized = address.toLowerCase();
+	return `kv:crowd:campaign:${normalized}`;
 }
 
-function createClient(env: Env) {
-	const chainId = resolveChainId(env.CHAIN_ID);
-	const rpcUrl = resolveRpcUrl(env.RPC_URL);
-	return createPublicClient({
-		chain: {
-			id: chainId,
-			name: `chain-${chainId}`,
-			nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-			rpcUrls: { default: { http: [rpcUrl] }, public: { http: [rpcUrl] } },
-		},
-		transport: http(rpcUrl),
-	});
+function kvKeyMeta(env: Env, address: string): string {
+	const normalized = address.toLowerCase();
+	return `kv:crowd:meta:${normalized}`;
 }
 
-async function getLatestIndex(env: Env): Promise<string[]> {
-	const raw = await env.KV.get(latestIndexKey(env));
-	if (!raw) return [];
+/**
+ * Get cached value from KV
+ */
+async function cacheGet<T = unknown>(env: Env, key: string): Promise<T | null> {
 	try {
-		const parsed = JSON.parse(raw);
-		if (!Array.isArray(parsed)) return [];
-		return parsed.filter((item): item is string => typeof item === 'string');
+		const cached = await env.KV.get(key, 'json');
+		if (!cached) return null;
+		return cached as T;
 	} catch (error) {
-		console.warn('Failed to parse latest index', error);
-		return [];
+		console.warn(`Cache get error for key ${key}:`, error);
+		return null;
 	}
 }
 
-async function putLatestIndex(env: Env, addresses: string[]) {
-	const trimmed = addresses.slice(0, MAX_INDEX_SIZE);
-	await env.KV.put(latestIndexKey(env), JSON.stringify(trimmed));
-}
-
-async function getDeadlineIndex(env: Env): Promise<DeadlineEntry[]> {
-	const raw = await env.KV.get(deadlineIndexKey(env));
-	if (!raw) return [];
+/**
+ * Set cached value in KV with TTL
+ */
+async function cacheSet(env: Env, key: string, value: unknown, ttlSeconds: number = CACHE_TTL): Promise<void> {
 	try {
-		const parsed = JSON.parse(raw);
-		if (!Array.isArray(parsed)) return [];
-		return parsed
-			.map((item) => {
-				if (item && typeof item === 'object' && 'address' in item && 'deadline' in item) {
-					const address = (item as Record<string, unknown>).address;
-					const deadline = (item as Record<string, unknown>).deadline;
-					if (typeof address === 'string' && typeof deadline === 'number') {
-						return { address, deadline } satisfies DeadlineEntry;
-					}
-				}
-				if (typeof item === 'string') {
-					return { address: item, deadline: Number.POSITIVE_INFINITY } satisfies DeadlineEntry;
-				}
-				return null;
-			})
-			.filter((entry): entry is DeadlineEntry => entry !== null);
+		await env.KV.put(key, JSON.stringify(value), { expirationTtl: ttlSeconds });
 	} catch (error) {
-		console.warn('Failed to parse deadline index', error);
-		return [];
+		console.warn(`Cache set error for key ${key}:`, error);
 	}
 }
 
-async function putDeadlineIndex(env: Env, entries: DeadlineEntry[]) {
-	const trimmed = entries.slice(0, MAX_INDEX_SIZE);
-	await env.KV.put(deadlineIndexKey(env), JSON.stringify(trimmed));
+/**
+ * Read-through cache wrapper (stale-while-revalidate pattern)
+ * 
+ * TODO: Implement detailed caching rules in next iteration
+ */
+async function withCache<T>(
+	env: Env,
+	key: string,
+	fetcher: () => Promise<T>,
+	ttlSeconds: number = CACHE_TTL
+): Promise<T> {
+	// Try to get from cache first
+	const cached = await cacheGet<T>(env, key);
+	if (cached !== null) {
+		// Return cached value immediately, refresh in background
+		// Note: In Cloudflare Workers, we can't truly background refresh,
+		// but we can return stale data if fetch fails
+		return cached;
+	}
+
+	// Cache miss: fetch fresh data
+	const fresh = await fetcher();
+	await cacheSet(env, key, fresh, ttlSeconds);
+	return fresh;
 }
 
-async function loadCampaign(env: Env, address: string) {
-	const record = await env.KV.get(campaignKey(env, address), 'json');
-	if (!record) return null;
-	return record as CampaignRecord;
-}
+// ============================================================================
+// Route Handlers
+// ============================================================================
 
-async function handleCampaignsRequest(request: Request, env: Env) {
+/**
+ * GET /campaigns
+ * Maps to API /projects with backward-compatible response format
+ */
+async function handleCampaignsRequest(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url);
 	const limitParam = url.searchParams.get('limit');
 	const cursorParam = url.searchParams.get('cursor');
 	const sortParam = url.searchParams.get('sort');
 
-	const limit = limitParam ? Number.parseInt(limitParam, 10) : DEFAULT_LIMIT;
+	// Parse query params
+	const limit = limitParam ? Number.parseInt(limitParam, 10) : 12;
 	const cursor = cursorParam ? Number.parseInt(cursorParam, 10) : 0;
 	const sort = sortParam === 'deadline' ? 'deadline' : 'latest';
 
+	// Validate params
 	if (Number.isNaN(limit) || limit <= 0 || limit > 100) {
 		return jsonResponse({ error: 'Invalid limit' }, { status: 400 });
 	}
@@ -272,13 +234,38 @@ async function handleCampaignsRequest(request: Request, env: Env) {
 		return jsonResponse({ error: 'Invalid cursor' }, { status: 400 });
 	}
 
-	const addresses = sort === 'latest' ? await getLatestIndex(env) : (await getDeadlineIndex(env)).map((entry) => entry.address);
+	// Calculate page number from cursor (API uses page-based pagination)
+	const page = Math.floor(cursor / limit) + 1;
 
-	const page = addresses.slice(cursor, cursor + limit);
-	const campaignsRaw = await Promise.all(page.map((address) => loadCampaign(env, address)));
-	const campaigns = campaignsRaw.filter((item): item is CampaignRecord => Boolean(item));
+	// Fetch from API with caching
+	const cacheKey = `campaigns:${sort}:${page}:${limit}`;
+	const apiResponse = await withCache(
+		env,
+		cacheKey,
+		async () => {
+			const response = await fetchFromApi<{
+				items: CampaignRecord[];
+				pagination: {
+					page: number;
+					limit: number;
+					total: number;
+					totalPages: number;
+				};
+			}>(env, `/projects?page=${page}&limit=${limit}&sort=${sort}`);
 
-	const nextCursor = cursor + page.length < addresses.length ? cursor + page.length : null;
+			if (!response.success) {
+				throw new Error(response.error.message);
+			}
+
+			return response.data;
+		},
+		60 // Cache for 60 seconds
+	);
+
+	// Transform API response to backward-compatible format
+	const campaigns = apiResponse.items || [];
+	const total = apiResponse.pagination.total || 0;
+	const nextCursor = cursor + campaigns.length < total ? cursor + campaigns.length : null;
 
 	const body: CampaignListResponse = {
 		campaigns,
@@ -286,200 +273,155 @@ async function handleCampaignsRequest(request: Request, env: Env) {
 		nextCursor,
 		hasMore: nextCursor !== null,
 		sort,
-		total: addresses.length,
+		total,
 	};
 
-	return jsonResponse(body, { status: 200, headers: { 'Cache-Control': 'no-store' } });
+	return jsonResponse(body, { status: 200, headers: { 'Cache-Control': 'public, max-age=60' } });
 }
 
-async function updateLatestIndex(env: Env, address: Address) {
-	const normalised = normaliseAddress(address);
-	const index = await getLatestIndex(env);
-	const filtered = index.filter((item) => normaliseAddress(item) !== normalised);
-	filtered.unshift(normalised);
-	await putLatestIndex(env, filtered);
-}
-
-async function updateDeadlineIndex(env: Env, address: Address, deadline: number) {
-	const normalised = normaliseAddress(address);
-	const index = await getDeadlineIndex(env);
-	const filtered = index.filter((item) => normaliseAddress(item.address) !== normalised);
-	filtered.push({ address: normalised, deadline });
-	filtered.sort((a, b) => a.deadline - b.deadline);
-	await putDeadlineIndex(env, filtered);
-}
-
-async function persistCampaign(env: Env, record: CampaignRecord) {
-	const keyAddress = normaliseAddress(record.address);
-	const storedRecord: CampaignRecord = { ...record, address: keyAddress as Address };
-	await env.KV.put(campaignKey(env, keyAddress), JSON.stringify(storedRecord));
-	await updateLatestIndex(env, storedRecord.address);
-	await updateDeadlineIndex(env, storedRecord.address, storedRecord.deadline);
-}
-
-async function runIndexer(env: Env) {
-	const factoryAddress = resolveFactory(env.FACTORY);
-	const deployBlock = resolveDeployBlock(env.DEPLOY_BLOCK);
-	const client = createClient(env);
-
-	// ⚠️ 每次只处理 5 个区块，符合 Alchemy 免费额度
-	const BLOCK_BATCH = 5n;
-
-	const lastProcessedRaw = await env.KV.get(checkpointKey(env));
-	const fromBlock = lastProcessedRaw ? parseRequiredBigInt(lastProcessedRaw, 'checkpoint') + 1n : deployBlock;
-	const headBlock = await withRetry(() => client.getBlockNumber());
-
-	if (fromBlock > headBlock) {
-		await env.KV.put(checkpointKey(env), headBlock.toString());
-		return;
+/**
+ * GET /campaigns/:id
+ * Maps to API /projects/:address
+ */
+async function handleCampaignDetailRequest(request: Request, env: Env, address: string): Promise<Response> {
+	// Validate address format
+	if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
+		return jsonResponse({ error: 'Invalid address format' }, { status: 400 });
 	}
 
-	const safeToBlock = fromBlock + BLOCK_BATCH - 1n > headBlock ? headBlock : fromBlock + BLOCK_BATCH - 1n;
+	// Fetch from API with caching
+	const cacheKey = kvKeyCampaign(env, address);
+	const apiResponse = await withCache(
+		env,
+		cacheKey,
+		async () => {
+			const response = await fetchFromApi<CampaignRecord>(env, `/projects/${address}`);
 
-	const logs = await withRetry(() =>
-		client.getLogs({
-			address: factoryAddress,
-			event: campaignCreatedEvent,
-			fromBlock,
-			toBlock: safeToBlock,
-		}),
+			if (!response.success) {
+				throw new Error(response.error.message);
+			}
+
+			return response.data;
+		},
+		120 // Cache for 120 seconds
 	);
 
-	console.log(`📦 Processing ${logs.length} logs from ${fromBlock} to ${safeToBlock}`);
-
-	for (const log of logs) {
-		const campaignAddress = log.args.campaign as Address;
-		const existing = await loadCampaign(env, campaignAddress);
-		if (existing) continue;
-
-		let summary, metadata;
-		try {
-			[summary, metadata] = await client.multicall({
-				allowFailure: false,
-				contracts: [
-					{ address: campaignAddress, abi: campaignAbi, functionName: 'getSummary' },
-					{ address: campaignAddress, abi: campaignAbi, functionName: 'metadataURI' },
-				],
-			});
-		} catch {
-			summary = await client.readContract({
-				address: campaignAddress,
-				abi: campaignAbi,
-				functionName: 'getSummary',
-			});
-			metadata = await client.readContract({
-				address: campaignAddress,
-				abi: campaignAbi,
-				functionName: 'metadataURI',
-			});
-		}
-
-		const [creator, goal, deadline, status, totalPledged] = summary as [Address, bigint, bigint, number, bigint];
-		const block = await client.getBlock({ blockNumber: log.blockNumber });
-
-		const record: CampaignRecord = {
-			address: campaignAddress,
-			creator,
-			goal: goal.toString(),
-			deadline: Number(deadline),
-			status: Number(status),
-			totalPledged: totalPledged.toString(),
-			metadataURI: metadata as string,
-			createdAt: Number(block.timestamp),
-			createdBlock: Number(log.blockNumber),
-		};
-
-		await persistCampaign(env, record);
-	}
-
-	await env.KV.put(checkpointKey(env), safeToBlock.toString());
+	return jsonResponse(apiResponse, { status: 200, headers: { 'Cache-Control': 'public, max-age=120' } });
 }
-async function handleHealthRequest(env: Env) {
-	const client = createClient(env);
-	const [checkpointRaw, latestIndex, headNumber] = await Promise.all([
-		env.KV.get(checkpointKey(env)),
-		getLatestIndex(env),
-		withRetry(() => client.getBlockNumber()),
-	]);
 
-	const headBlock = await withRetry(() => client.getBlock({ blockNumber: headNumber }));
-	const lastIndexedNumber = checkpointRaw ? parseRequiredBigInt(checkpointRaw, 'checkpoint') : null;
-	const lastIndexedBlock = lastIndexedNumber ? await withRetry(() => client.getBlock({ blockNumber: lastIndexedNumber })) : null;
-
-	const lagSeconds = lastIndexedBlock ? Number(headBlock.timestamp - lastIndexedBlock.timestamp) : null;
+/**
+ * GET /health
+ * Maps to API /healthz with additional edge worker status
+ */
+async function handleHealthRequest(env: Env): Promise<Response> {
+	// Check API health
+	const apiHealth = await fetchFromApi<{ status: string; timestamp: string }>(env, '/healthz');
 
 	const body = {
-		head: headNumber.toString(),
-		lastIndexedBlock: lastIndexedNumber ? lastIndexedNumber.toString() : null,
-		lagSeconds,
-		count: latestIndex.length,
+		status: apiHealth.success ? 'ok' : 'degraded',
+		edge: 'ok',
+		api: apiHealth.success ? apiHealth.data : { error: apiHealth.error.message },
+		timestamp: new Date().toISOString(),
+	};
+
+	return jsonResponse(body, {
+		status: apiHealth.success ? 200 : 503,
+		headers: { 'Cache-Control': 'no-store' },
+	});
+}
+
+/**
+ * GET /stats
+ * Maps to API /stats
+ */
+async function handleStatsRequest(env: Env): Promise<Response> {
+	const cacheKey = 'stats:global';
+	const apiResponse = await withCache(
+		env,
+		cacheKey,
+		async () => {
+			const response = await fetchFromApi(env, '/stats');
+
+			if (!response.success) {
+				throw new Error(response.error.message);
+			}
+
+			return response.data;
+		},
+		120 // Cache for 120 seconds
+	);
+
+	return jsonResponse(apiResponse, { status: 200, headers: { 'Cache-Control': 'public, max-age=120' } });
+}
+
+/**
+ * GET /debug
+ * Debug endpoint for inspecting worker state
+ */
+async function handleDebugRequest(env: Env): Promise<Response> {
+	const kvList = await env.KV.list();
+	const body = {
+		kvCount: kvList.keys.length,
+		apiUrl: env.API_URL,
+		timestamp: new Date().toISOString(),
 	};
 
 	return jsonResponse(body, { status: 200, headers: { 'Cache-Control': 'no-store' } });
 }
+
+// ============================================================================
+// Main Worker Handler
+// ============================================================================
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
 
-		// ✅ 1. 处理预检请求
+		// Handle CORS preflight
 		if (request.method === 'OPTIONS') {
 			return withCors({ status: 204 });
 		}
 
+		// Validate API_URL is configured
+		if (!env.API_URL || env.API_URL.trim().length === 0) {
+			console.error('API_URL is not configured');
+			return jsonResponse({ error: 'Server configuration error' }, { status: 500 });
+		}
+
 		let response: Response;
+
 		try {
-			if (request.method === 'GET' && url.pathname === '/run') {
-				const provided = request.headers.get('x-indexer-key') ?? url.searchParams.get('key');
-				if (env.INDEXER_KEY && provided !== env.INDEXER_KEY) {
-					return jsonResponse({ ok: false, error: 'Unauthorized' }, { status: 401 });
-				}
-				try {
-					await runIndexer(env);
-					return jsonResponse({ ok: true, msg: 'Indexer executed successfully' });
-				} catch (err: any) {
-					console.error('Indexer run failed', err);
-					return jsonResponse({
-						ok: false,
-						error: err?.message ?? 'Unknown error',
-						stack: err?.stack ?? null,
-					});
-				}
-			}
-
-			if (request.method === 'GET' && url.pathname === '/debug') {
-				const kvList = await env.KV.list();
-				const checkpoint = await env.KV.get(checkpointKey(env));
-				return jsonResponse({
-					kvCount: kvList.keys.length,
-					checkpoint,
-					factory: env.FACTORY,
-					deployBlock: env.DEPLOY_BLOCK,
-					rpc: env.RPC_URL,
-					enabled: env.INDEXER_ENABLED === 'true',
-					intervalMs: Number.parseInt(env.INDEX_INTERVAL_MS ?? '', 10) || 15 * 60 * 1000,
-					lastRun: await env.KV.get(lastRunKey(env)),
-				});
-			}
-
+			// Route handling
 			if (request.method === 'GET' && url.pathname === '/campaigns') {
 				response = await handleCampaignsRequest(request, env);
-				await maybeScheduleIndexer(env, ctx);
+			} else if (request.method === 'GET' && url.pathname.startsWith('/campaigns/')) {
+				// Extract address from path: /campaigns/:address
+				const address = url.pathname.split('/campaigns/')[1]?.split('?')[0];
+				if (!address) {
+					response = jsonResponse({ error: 'Missing address parameter' }, { status: 400 });
+				} else {
+					response = await handleCampaignDetailRequest(request, env, address);
+				}
 			} else if (request.method === 'GET' && url.pathname === '/health') {
 				response = await handleHealthRequest(env);
-				await maybeScheduleIndexer(env, ctx);
+			} else if (request.method === 'GET' && url.pathname === '/stats') {
+				response = await handleStatsRequest(env);
+			} else if (request.method === 'GET' && url.pathname === '/debug') {
+				response = await handleDebugRequest(env);
 			} else {
 				response = jsonResponse({ error: 'Not Found' }, { status: 404 });
 			}
 		} catch (err) {
-			console.error('Request failed', err);
-			response = jsonResponse({ error: 'Internal Error' }, { status: 500 });
+			console.error('Request failed:', err);
+			response = jsonResponse(
+				{
+					error: 'Internal Server Error',
+					message: err instanceof Error ? err.message : 'Unknown error',
+				},
+				{ status: 500 }
+			);
 		}
 
-		// ✅ 2. 统一添加 CORS header
-		return withCors({ status: response.status, statusText: response.statusText, headers: response.headers }, response.body ?? null);
-	},
-	async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-		await maybeScheduleIndexer(env, ctx);
+		return response;
 	},
 } satisfies ExportedHandler<Env>;

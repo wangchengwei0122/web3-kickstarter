@@ -1,0 +1,25 @@
+# Cloudflare Worker configuration for Fundr Edge Cache Layer
+# Wrangler v3 compatible
+
+name = "crowdfunding-edge"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+workers_dev = true
+
+# Cron triggers (optional - for background cache refresh)
+[triggers]
+crons = ["*/1 * * * *"]
+
+# KV namespace bindings
+[[kv_namespaces]]
+binding = "KV"
+# Production KV namespace ID
+# Run `wrangler kv:namespace create KV` to get the ID
+id = "fd693cb1fdfe410aacb6843ba16f05d1"
+
+# Environment variables
+# Note: Sensitive values should be set via .dev.vars or wrangler secret
+[vars]
+# API_URL should be set in .dev.vars for local development
+# For production, set via: wrangler secret put API_URL
+
