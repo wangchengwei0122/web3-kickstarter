@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx watch src/index.ts",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "clean": "rm -rf dist",
     "build": "pnpm clean && tsc -p tsconfig.json",
     "migrate:gen": "NODE_TLS_REJECT_UNAUTHORIZED=0 drizzle-kit generate",

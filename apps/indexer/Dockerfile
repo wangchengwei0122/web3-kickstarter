@@ -37,4 +37,4 @@ COPY --from=builder /app/apps/indexer /app/apps/indexer
 
 WORKDIR /app/apps/indexer
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/src/index.js"]

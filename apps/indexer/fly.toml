@@ -7,7 +7,7 @@ primary_region = "sin"
 
 # ---------- 进程 ----------
 [processes]
-  indexer = "node dist/index.js"
+  indexer = "node dist/src/index.js"
 
 # ---------- VM ----------
 [vm]
