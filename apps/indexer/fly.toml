@@ -17,3 +17,6 @@ primary_region = "sin"
 # ---------- 自动重启（必须用数组形式） ----------
 [[restart]]
   policy = "always"
+
+[env]
+  NODE_TLS_REJECT_UNAUTHORIZED = "0"

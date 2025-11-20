@@ -33,10 +33,13 @@ docker buildx build \
 echo "👍 Docker 镜像构建完成: $DOCKER_IMAGE:$TAG"
 
 echo "✈️ 开始 Fly.io 部署..."
-fly deploy \
-  --remote-only \
-  --image "$DOCKER_IMAGE:$TAG" \
-  --app "$APP_NAME"
+(
+  cd apps/indexer
+  fly deploy \
+    --remote-only \
+    --image "$DOCKER_IMAGE:$TAG" \
+    --app "$APP_NAME"
+)
 
 echo "🎉 部署完成！"
 echo "👉 镜像版本: $DOCKER_IMAGE:$TAG"

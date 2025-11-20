@@ -29,8 +29,9 @@ ENV NODE_TLS_REJECT_UNAUTHORIZED=0
 
 # 复制根 node_modules（包含 .pnpm store，供所有 workspace 依赖使用）
 COPY --from=builder /app/node_modules /app/node_modules
-# 复制需要的 packages（确保 workspace 路径存在）
+# 复制需要的 packages（确保 workspace 路径存在，供 pnpm 的 workspace 链接解析）
 COPY --from=builder /app/packages/db /app/packages/db
+COPY --from=builder /app/packages/contracts /app/packages/contracts
 
 # 复制 indexer 的构建产物和依赖，保持与 builder 相同的目录结构
 COPY --from=builder /app/apps/indexer /app/apps/indexer
